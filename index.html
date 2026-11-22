@@ -1,0 +1,2916 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SYNTHPOP // MIXER — Интерактивный техно-поп грувбокс</title>
+  <meta name="description" content="SYNTHPOP // MIXER — интерактивный техно-поп грувбокс и синтезатор на Web Audio API с 16-шаговым секвенсором, визуализатором и записью микса." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="SYNTHPOP // MIXER — Berlin Groovebox" />
+  <meta property="og:description" content="Интерактивный техно-поп грувбокс и синтезатор на Web Audio API." />
+  <meta property="og:image" content="https://dmitperson42.github.io/synthpop-mixer/cover.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SYNTHPOP // MIXER — Berlin Groovebox" />
+  <meta name="twitter:image" content="https://dmitperson42.github.io/synthpop-mixer/cover.jpg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            obsidian: '#0b0c12',
+            panel: '#141622',
+            panelLight: '#1b1e2e',
+            borderDark: '#262a3e',
+            cyanNeon: '#00f0ff',
+            magentaNeon: '#ff2a85',
+            limeNeon: '#b8ff00',
+            amberNeon: '#ffb800',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg-obsidian: #0b0c12;
+      --bg-panel: #141622;
+      --border-crisp: #25293d;
+      --cyan: #00f0ff;
+      --magenta: #ff2a85;
+      --amber: #ffb800;
+      --lime: #b8ff00;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      background-color: var(--bg-obsidian);
+      color: #e5e7f5;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* Текстура матового металла для панелей */
+    .studio-panel {
+      background: linear-gradient(165deg, #171a29 0%, #121420 100%);
+      border: 1px solid #262b40;
+      box-shadow:
+        0 10px 30px -10px rgba(0, 0, 0, 0.75),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .hardware-inset {
+      background: #0c0e16;
+      border: 1px solid #1f2336;
+      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.7);
+    }
+
+    /* Кастомные тактильные ползунки (фейдеры) */
+    input[type="range"].studio-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #0d0f18;
+      height: 6px;
+      border-radius: 999px;
+      border: 1px solid #25293d;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"].studio-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #eef2ff, #9ca3af);
+      border: 2px solid var(--slider-accent, #00f0ff);
+      box-shadow: 0 0 10px var(--slider-glow, rgba(0, 240, 255, 0.55));
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    input[type="range"].studio-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    input[type="range"].studio-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #eef2ff, #9ca3af);
+      border: 2px solid var(--slider-accent, #00f0ff);
+      box-shadow: 0 0 10px var(--slider-glow, rgba(0, 240, 255, 0.55));
+      cursor: pointer;
+    }
+
+    /* Неоновые тени и подсветка кнопок */
+    .btn-neon-cyan {
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.28);
+    }
+    .btn-neon-magenta {
+      box-shadow: 0 0 16px rgba(255, 42, 133, 0.32);
+    }
+    .btn-neon-lime {
+      box-shadow: 0 0 16px rgba(184, 255, 0, 0.25);
+    }
+
+    /* Анимация индикатора записи */
+    @keyframes recPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+    .rec-dot-pulse {
+      animation: recPulse 1s infinite ease-in-out;
+    }
+
+    /* Подсветка текущего шага (плейхед) */
+    .step-cell {
+      transition: background-color 0.08s ease, transform 0.08s ease, box-shadow 0.08s ease;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .step-playhead-col {
+      box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45);
+      filter: brightness(1.28);
+    }
+
+    /* Кнопки лайв-перформанса */
+    .perf-pad {
+      transition: all 0.1s cubic-bezier(0.2, 0.8, 0.2, 1);
+      user-select: none;
+      touch-action: none;
+    }
+    .perf-pad:active, .perf-pad.pad-active {
+      transform: scale(0.96);
+    }
+
+    /* Стилизация выпадающих списков */
+    select.studio-select {
+      background-color: #0e101a;
+      border: 1px solid #2a2f47;
+      color: #e2e8f0;
+      outline: none;
+      cursor: pointer;
+    }
+    select.studio-select:focus {
+      border-color: #00f0ff;
+      box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.18);
+    }
+
+    /* Тонкий скроллбар для мобильных матриц */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b0c12;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #282d44;
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a4263;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+
+  <!-- Уведомления (Toast) вместо alert() -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-xs w-full px-2 sm:px-0"></div>
+
+  <!-- Основной контейнер студии -->
+  <div class="max-w-[1600px] mx-auto px-2.5 sm:px-4 py-3 flex flex-col gap-3">
+
+    <!-- ==================== ВЕРХНЯЯ ПАНЕЛЬ (HEADER) ==================== -->
+    <header class="studio-panel rounded-2xl p-3 sm:p-3.5 flex flex-col gap-3">
+      <!-- Первая строка: Логотип, Визуализатор, Главные действия -->
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <!-- Брендинг и статус -->
+        <div class="flex items-center gap-3">
+          <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 via-fuchsia-500/20 to-lime-400/20 border border-cyan-400/40 shadow-[0_0_20px_rgba(0,240,255,0.2)]">
+            <svg class="w-5 h-5 text-cyanNeon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M2 12h3l2-7 4 14 3-10 2 5 2-2h4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span id="status-led" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-600 border border-obsidian transition-all duration-150"></span>
+          </div>
+          <div>
+            <h1 class="text-base sm:text-lg font-extrabold tracking-wider text-white flex items-center gap-1.5 leading-tight">
+              <span>SYNTHPOP</span>
+              <span class="text-cyanNeon font-mono">//</span>
+              <span class="bg-gradient-to-r from-cyanNeon via-fuchsia-400 to-magentaNeon bg-clip-text text-transparent">MIXER</span>
+            </h1>
+            <p class="text-[11px] text-slate-400 font-mono tracking-wide">BERLIN GROOVEBOX · WEB AUDIO SYNTH</p>
+          </div>
+        </div>
+
+        <!-- Визуализатор спектра и осциллограммы -->
+        <div class="flex-1 min-w-[200px] max-w-xl h-12 sm:h-14 hardware-inset rounded-xl overflow-hidden relative order-3 lg:order-2 w-full lg:w-auto">
+          <canvas id="visualizer-canvas" class="w-full h-full block"></canvas>
+          <div class="absolute top-1 left-2 text-[9px] font-mono uppercase tracking-widest text-slate-500 pointer-events-none select-none">
+            SPECTRUM // WAVE
+          </div>
+          <div id="beat-badge" class="absolute top-1 right-2 text-[10px] font-mono font-bold text-cyanNeon/80 pointer-events-none select-none">
+            STEP 01/16
+          </div>
+        </div>
+
+        <!-- Кнопка Старт/Стоп и Запись -->
+        <div class="flex items-center gap-2 order-2 lg:order-3">
+          <button id="play-btn" title="Старт / Стоп (Пробел)"
+            class="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-sm tracking-wide bg-gradient-to-r from-cyan-500 to-cyan-400 text-obsidian hover:brightness-110 active:scale-95 transition-all btn-neon-cyan cursor-pointer">
+            <svg id="play-icon" class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="stop-icon" class="w-4 h-4 fill-current hidden" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            <span id="play-label">СТАРТ</span>
+          </button>
+
+          <button id="record-btn" title="Записать микс в аудиофайл"
+            class="flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-[#1c1f30] hover:bg-[#252940] text-slate-200 border border-[#323856] transition-all active:scale-95 cursor-pointer">
+            <span id="rec-dot" class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+            <span id="rec-label">Запись</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Вторая строка: Транспорт, Тональность, Пресеты, Утилиты -->
+      <div class="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-borderDark/80">
+        <!-- BPM и Свинг -->
+        <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+          <div class="flex items-center gap-2 bg-[#0d0f18] px-3 py-1.5 rounded-xl border border-[#22263a]">
+            <span class="text-[11px] font-mono uppercase text-slate-400">BPM</span>
+            <button id="bpm-down" class="w-6 h-6 rounded-md bg-[#1a1e30] hover:bg-[#262b44] text-cyanNeon font-bold text-sm flex items-center justify-center transition cursor-pointer">-</button>
+            <span id="bpm-value" class="font-mono font-bold text-sm text-cyanNeon w-8 text-center">126</span>
+            <button id="bpm-up" class="w-6 h-6 rounded-md bg-[#1a1e30] hover:bg-[#262b44] text-cyanNeon font-bold text-sm flex items-center justify-center transition cursor-pointer">+</button>
+            <input id="bpm-slider" type="range" min="105" max="145" value="126" class="studio-slider w-20 sm:w-24 hidden sm:block" style="--slider-accent:#00f0ff; --slider-glow:rgba(0,240,255,0.5);" />
+          </div>
+
+          <div class="flex items-center gap-2 bg-[#0d0f18] px-3 py-1.5 rounded-xl border border-[#22263a]">
+            <span class="text-[11px] font-mono uppercase text-slate-400">СВИНГ</span>
+            <input id="swing-slider" type="range" min="0" max="45" value="8" class="studio-slider w-16 sm:w-20" style="--slider-accent:#ff2a85; --slider-glow:rgba(255,42,133,0.5);" />
+            <span id="swing-value" class="font-mono text-xs font-semibold text-magentaNeon w-8 text-right">8%</span>
+          </div>
+        </div>
+
+        <!-- Тональность и Пресет -->
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex items-center gap-1.5">
+            <label for="scale-select" class="text-[11px] font-mono uppercase text-slate-400 hidden sm:inline">Тональность:</label>
+            <select id="scale-select" class="studio-select rounded-xl px-2.5 py-1.5 text-xs font-semibold">
+              <option value="Am">Ля минор (Am)</option>
+              <option value="Cm">До минор (Cm)</option>
+              <option value="F#m">Фа# минор (F#m)</option>
+              <option value="Em">Ми минор (Em)</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <label for="preset-select" class="text-[11px] font-mono uppercase text-slate-400 hidden sm:inline">Пресет:</label>
+            <select id="preset-select" class="studio-select rounded-xl px-2.5 py-1.5 text-xs font-semibold text-cyanNeon border-cyan-500/40">
+              <option value="berlin">Неоновый Берлин</option>
+              <option value="cyberdisco">Кибер-Диско</option>
+              <option value="retrowave">Ретро-Волна</option>
+              <option value="nightpulse">Ночной Пульс</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Случайный микс и Очистить -->
+        <div class="flex items-center gap-2">
+          <button id="random-mix-btn" title="Создать случайные мелодии в выбранной тональности"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-fuchsia-600/30 to-cyan-600/30 hover:from-fuchsia-500/40 hover:to-cyan-500/40 border border-fuchsia-400/40 text-white transition active:scale-95 cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-magentaNeon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>
+            </svg>
+            <span>Случайный микс</span>
+          </button>
+
+          <button id="clear-all-btn" title="Очистить все текущие паттерны"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#1a1d2d] hover:bg-rose-950/50 hover:border-rose-500/50 hover:text-rose-200 border border-[#2c314a] text-slate-300 transition active:scale-95 cursor-pointer">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
+            </svg>
+            <span>Очистить</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ==================== ОСНОВНАЯ РАБОЧАЯ ОБЛАСТЬ ==================== -->
+    <main class="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start">
+
+      <!-- ЛЕВАЯ/ЦЕНТРАЛЬНАЯ ЧАСТЬ: Микшер мелодий, Пиано-ролл и Драм-машина (8 колонок) -->
+      <div class="xl:col-span-8 flex flex-col gap-3 min-w-0">
+
+        <!-- СЕКЦИЯ 1: МИКШЕР МЕЛОДИЙ И КЛИПОВ (4 трека) -->
+        <section class="studio-panel rounded-2xl p-3 sm:p-3.5">
+          <div class="flex items-center justify-between mb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyanNeon shadow-[0_0_8px_#00f0ff]"></span>
+              <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200">Микшер мелодий и клипов</h2>
+            </div>
+            <span class="text-[11px] text-slate-400 hidden sm:inline">Нажмите на дорожку для редактирования в пиано-ролле · A/B/C/D — смена риффа на лету</span>
+          </div>
+
+          <div id="melody-tracks-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            <!-- Заполняется динамически из JS -->
+          </div>
+        </section>
+
+        <!-- СЕКЦИЯ 1B: ИНТЕРАКТИВНЫЙ ПИАНО-РОЛЛ (МАТРИЦА МЕЛОДИЙ) -->
+        <section class="studio-panel rounded-2xl p-3 sm:p-3.5">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+            <div class="flex items-center gap-2.5">
+              <span id="pr-track-dot" class="w-3 h-3 rounded-full bg-cyanNeon shadow-[0_0_10px_#00f0ff]"></span>
+              <div>
+                <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                  <span>Пиано-ролл:</span>
+                  <span id="pr-track-name" class="text-cyanNeon">Лид (Lead)</span>
+                  <span id="pr-clip-badge" class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-cyan-500/20 text-cyanNeon border border-cyan-400/40">КЛИП A</span>
+                </h2>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-mono text-slate-400 hidden md:inline">Клик или ведение мышью — рисовать / стирать</span>
+              <button id="pr-generate-btn" title="Сгенерировать цепляющий рифф для этой дорожки"
+                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#1c2033] hover:bg-[#272c45] border border-cyan-500/35 text-cyanNeon transition active:scale-95 cursor-pointer">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+                <span>Сгенерировать</span>
+              </button>
+              <button id="pr-clear-btn" title="Очистить текущий клип дорожки"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#1a1d2d] hover:bg-rose-950/50 border border-[#2d324c] hover:border-rose-500/40 text-slate-300 hover:text-rose-200 transition active:scale-95 cursor-pointer">
+                Очистить
+              </button>
+            </div>
+          </div>
+
+          <!-- Матрица 8 ступеней лада x 16 шагов -->
+          <div class="hardware-inset rounded-xl p-2 overflow-x-auto">
+            <div class="min-w-[540px]">
+              <!-- Нумерация шагов 1..16 -->
+              <div class="grid grid-cols-[46px_repeat(16,minmax(0,1fr))] gap-1 mb-1.5 items-center">
+                <div class="text-[10px] font-mono text-slate-500 text-center">НОТА</div>
+                <div id="pr-step-numbers" class="contents"></div>
+              </div>
+              <!-- Строки нот -->
+              <div id="piano-roll-grid" class="flex flex-col gap-1"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- СЕКЦИЯ 2: ДРАМ-СЕКВЕНСОР (4 ударных инструмента) -->
+        <section class="studio-panel rounded-2xl p-3 sm:p-3.5">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-magentaNeon shadow-[0_0_8px_#ff2a85]"></span>
+              <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200">Драм-секвенсор (909 / Synth Drums)</h2>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button id="drum-random-btn" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#1c2033] hover:bg-[#272c45] border border-magentaNeon/35 text-magentaNeon transition active:scale-95 cursor-pointer">
+                Новый бит
+              </button>
+              <button id="drum-clear-btn" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#1a1d2d] hover:bg-rose-950/50 border border-[#2d324c] text-slate-300 transition active:scale-95 cursor-pointer">
+                Очистить
+              </button>
+            </div>
+          </div>
+
+          <div class="hardware-inset rounded-xl p-2 overflow-x-auto">
+            <div id="drum-grid-container" class="min-w-[580px] flex flex-col gap-1.5">
+              <!-- Заполняется динамически из JS -->
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ПРАВАЯ КОЛОНКА: ЛАЙВ-ПЕРФОРМАНС И FX РЭК (4 колонки) -->
+      <aside class="xl:col-span-4 flex flex-col gap-3 min-w-0">
+
+        <!-- XY FX PAD -->
+        <section class="studio-panel rounded-2xl p-3 sm:p-3.5">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-limeNeon shadow-[0_0_8px_#b8ff00]"></span>
+              <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200">XY FX Пэд (Фильтр + Эхо)</h2>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button id="xy-latch-btn" title="Удерживать точку FX после отпускания"
+                class="px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-[#1a1e2e] border border-[#2d334d] text-slate-300 hover:text-white transition cursor-pointer">
+                ФИКС: ВЫКЛ
+              </button>
+              <button id="xy-reset-btn" title="Сбросить FX пэд"
+                class="px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-[#1a1e2e] border border-[#2d334d] text-slate-300 hover:text-cyanNeon hover:border-cyanNeon/40 transition cursor-pointer">
+                СБРОС
+              </button>
+            </div>
+          </div>
+
+          <div class="relative w-full h-48 sm:h-52 hardware-inset rounded-xl overflow-hidden cursor-crosshair select-none touch-none" id="xy-pad-wrapper">
+            <canvas id="xy-pad-canvas" class="w-full h-full block"></canvas>
+            <div class="absolute top-2 left-2.5 text-[10px] font-mono text-magentaNeon/90 pointer-events-none">
+              ↑ РЕЗОНАНС + ФИДБЭК
+            </div>
+            <div class="absolute bottom-2 right-2.5 text-[10px] font-mono text-cyanNeon/90 pointer-events-none">
+              СРЕЗ ФИЛЬТРА (LPF) →
+            </div>
+            <div id="xy-readout" class="absolute bottom-2 left-2.5 text-[10px] font-mono text-slate-400 pointer-events-none bg-obsidian/70 px-1.5 py-0.5 rounded">
+              LPF: 14.5kHz · Q: 1.5
+            </div>
+          </div>
+        </section>
+
+        <!-- КНОПКИ ЛАЙВ-ПЕРФОРМАНСА -->
+        <section class="studio-panel rounded-2xl p-3 sm:p-3.5">
+          <div class="flex items-center justify-between mb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amberNeon shadow-[0_0_8px_#ffb800]"></span>
+              <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200">Лайв-эффекты (DJ Pads)</h2>
+            </div>
+            <span class="text-[10px] font-mono text-slate-400">НАЖАТЬ / УДЕРЖИВАТЬ</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <button id="pad-riser"
+              class="perf-pad group relative overflow-hidden rounded-xl p-3 text-left bg-gradient-to-br from-cyan-500/15 to-blue-600/10 border border-cyan-400/40 hover:border-cyan-300 hover:shadow-[0_0_18px_rgba(0,240,255,0.28)] cursor-pointer">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-extrabold tracking-wide text-cyanNeon">РАЙЗЕР</span>
+                <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200">ONE-SHOT</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-tight">Нарастающий шум + синтезаторный разгон</p>
+            </button>
+
+            <button id="pad-drop"
+              class="perf-pad group relative overflow-hidden rounded-xl p-3 text-left bg-gradient-to-br from-fuchsia-500/15 to-rose-600/10 border border-magentaNeon/40 hover:border-pink-400 hover:shadow-[0_0_18px_rgba(255,42,133,0.28)] cursor-pointer">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-extrabold tracking-wide text-magentaNeon">ДРОП</span>
+                <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-pink-200">IMPACT</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-tight">Глубокий саб-удар + шиммер взрыв</p>
+            </button>
+
+            <button id="pad-hpf"
+              class="perf-pad group relative overflow-hidden rounded-xl p-3 text-left bg-gradient-to-br from-amber-500/15 to-orange-600/10 border border-amberNeon/40 hover:border-amber-300 hover:shadow-[0_0_18px_rgba(255,184,0,0.28)] cursor-pointer">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-extrabold tracking-wide text-amberNeon">HPF БРЕЙК</span>
+                <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200">HOLD</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-tight">Удерживайте для DJ-среза басов</p>
+            </button>
+
+            <button id="pad-glitch"
+              class="perf-pad group relative overflow-hidden rounded-xl p-3 text-left bg-gradient-to-br from-lime-400/15 to-emerald-600/10 border border-limeNeon/40 hover:border-lime-300 hover:shadow-[0_0_18px_rgba(184,255,0,0.28)] cursor-pointer">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-extrabold tracking-wide text-limeNeon">ГЛИТЧ 1/8</span>
+                <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-lime-400/20 text-lime-200">HOLD</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-tight">Удерживайте для повтора доли (Roll)</p>
+            </button>
+          </div>
+        </section>
+
+        <!-- FX И МАСТЕР-РЭК (6 регуляторов) -->
+        <section class="studio-panel rounded-2xl p-3 sm:p-3.5">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyanNeon shadow-[0_0_8px_#00f0ff]"></span>
+              <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200">Мастер FX и Сайдчейн</h2>
+            </div>
+            <span class="text-[10px] font-mono text-slate-500">MASTER BUS</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Фильтр Cutoff -->
+            <div class="hardware-inset rounded-xl p-2.5 flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label for="fx-cutoff" class="text-[11px] font-semibold text-slate-300">Фильтр (LPF)</label>
+                <span id="fx-cutoff-val" class="text-[11px] font-mono text-cyanNeon">14.5k</span>
+              </div>
+              <input id="fx-cutoff" type="range" min="0" max="100" value="94" class="studio-slider w-full" style="--slider-accent:#00f0ff; --slider-glow:rgba(0,240,255,0.5);" />
+            </div>
+
+            <!-- Резонанс -->
+            <div class="hardware-inset rounded-xl p-2.5 flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label for="fx-res" class="text-[11px] font-semibold text-slate-300">Резонанс</label>
+                <span id="fx-res-val" class="text-[11px] font-mono text-magentaNeon">1.5</span>
+              </div>
+              <input id="fx-res" type="range" min="0" max="100" value="10" class="studio-slider w-full" style="--slider-accent:#ff2a85; --slider-glow:rgba(255,42,133,0.5);" />
+            </div>
+
+            <!-- Дилей -->
+            <div class="hardware-inset rounded-xl p-2.5 flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label for="fx-delay" class="text-[11px] font-semibold text-slate-300">Дилей (Echo)</label>
+                <span id="fx-delay-val" class="text-[11px] font-mono text-cyanNeon">28%</span>
+              </div>
+              <input id="fx-delay" type="range" min="0" max="100" value="28" class="studio-slider w-full" style="--slider-accent:#38bdf8; --slider-glow:rgba(56,189,248,0.5);" />
+            </div>
+
+            <!-- Реверб -->
+            <div class="hardware-inset rounded-xl p-2.5 flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label for="fx-reverb" class="text-[11px] font-semibold text-slate-300">Реверб (Space)</label>
+                <span id="fx-reverb-val" class="text-[11px] font-mono text-purple-400">32%</span>
+              </div>
+              <input id="fx-reverb" type="range" min="0" max="100" value="32" class="studio-slider w-full" style="--slider-accent:#a855f7; --slider-glow:rgba(168,85,247,0.5);" />
+            </div>
+
+            <!-- Сайдчейн (Pump) -->
+            <div class="hardware-inset rounded-xl p-2.5 flex flex-col gap-1.5 border-limeNeon/25">
+              <div class="flex items-center justify-between">
+                <label for="fx-sidechain" class="text-[11px] font-semibold text-limeNeon">Сайдчейн (Pump)</label>
+                <span id="fx-sidechain-val" class="text-[11px] font-mono text-limeNeon">68%</span>
+              </div>
+              <input id="fx-sidechain" type="range" min="0" max="100" value="68" class="studio-slider w-full" style="--slider-accent:#b8ff00; --slider-glow:rgba(184,255,0,0.5);" />
+            </div>
+
+            <!-- Мастер-громкость -->
+            <div class="hardware-inset rounded-xl p-2.5 flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label for="fx-master" class="text-[11px] font-semibold text-slate-200">Мастер</label>
+                <span id="fx-master-val" class="text-[11px] font-mono text-amberNeon">85%</span>
+              </div>
+              <input id="fx-master" type="range" min="0" max="100" value="85" class="studio-slider w-full" style="--slider-accent:#ffb800; --slider-glow:rgba(255,184,0,0.5);" />
+            </div>
+          </div>
+
+          <div class="mt-3 pt-2.5 border-t border-borderDark/70 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+            <span>ПРОБЕЛ: СТАРТ/СТОП</span>
+            <span>КЛАВИШИ 1-4: ДОРОЖКИ</span>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <!-- ==================== СКРИПТ СИНТЕЗАТОРА И ИНТЕРФЕЙСА ==================== -->
+  <script>
+    (() => {
+      'use strict';
+
+      /* =========================================================================
+       * 1. МУЗЫКАЛЬНАЯ ТЕОРИЯ, ГАММЫ И КОНФИГУРАЦИЯ ДОРОЖЕК
+       * ========================================================================= */
+      const SCALES = {
+        'Am': {
+          name: 'Ля минор',
+          rootMidi: 57, // A3
+          intervals: [0, 2, 3, 5, 7, 8, 10, 12],
+          labels: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'A\'']
+        },
+        'Cm': {
+          name: 'До минор',
+          rootMidi: 60, // C4
+          intervals: [0, 2, 3, 5, 7, 8, 10, 12],
+          labels: ['C', 'D', 'D#', 'F', 'G', 'G#', 'A#', 'C\'']
+        },
+        'F#m': {
+          name: 'Фа# минор',
+          rootMidi: 54, // F#3
+          intervals: [0, 2, 3, 5, 7, 8, 10, 12],
+          labels: ['F#', 'G#', 'A', 'B', 'C#', 'D', 'E', 'F#\'']
+        },
+        'Em': {
+          name: 'Ми минор',
+          rootMidi: 52, // E3
+          intervals: [0, 2, 3, 5, 7, 8, 10, 12],
+          labels: ['E', 'F#', 'G', 'A', 'B', 'C', 'D', 'E\'']
+        }
+      };
+
+      const TIMBRES = [
+        { id: 'supersaw', label: 'Supersaw' },
+        { id: 'fm_pluck', label: 'FM Pluck' },
+        { id: 'acid_saw', label: 'Acid Saw' },
+        { id: 'retro_square', label: 'Retro Square' },
+        { id: 'glass_bell', label: 'Glass Bell' },
+        { id: 'sub_punch', label: 'Sub Punch' }
+      ];
+
+      const TRACK_META = [
+        {
+          id: 'lead',
+          name: 'Лид (Lead)',
+          shortName: 'Лид',
+          color: '#00f0ff',
+          glow: 'rgba(0, 240, 255, 0.45)',
+          bgTint: 'rgba(0, 240, 255, 0.14)',
+          octaveOffset: 12, // +1 октава
+          defaultTimbre: 'supersaw',
+          defaultVol: 0.72
+        },
+        {
+          id: 'arp',
+          name: 'Арпеджио (Arp)',
+          shortName: 'Арпеджио',
+          color: '#ff2a85',
+          glow: 'rgba(255, 42, 133, 0.45)',
+          bgTint: 'rgba(255, 42, 133, 0.14)',
+          octaveOffset: 0,
+          defaultTimbre: 'fm_pluck',
+          defaultVol: 0.68
+        },
+        {
+          id: 'pad',
+          name: 'Аккорды (Pad)',
+          shortName: 'Аккорды',
+          color: '#ffb800',
+          glow: 'rgba(255, 184, 0, 0.45)',
+          bgTint: 'rgba(255, 184, 0, 0.14)',
+          octaveOffset: -12,
+          defaultTimbre: 'supersaw',
+          defaultVol: 0.62
+        },
+        {
+          id: 'bass',
+          name: 'Бас (Bass)',
+          shortName: 'Бас',
+          color: '#b8ff00',
+          glow: 'rgba(184, 255, 0, 0.45)',
+          bgTint: 'rgba(184, 255, 0, 0.14)',
+          octaveOffset: -24,
+          defaultTimbre: 'acid_saw',
+          defaultVol: 0.84
+        }
+      ];
+
+      const DRUM_META = [
+        { id: 'kick', name: 'Бочка', sub: 'KICK', color: '#00f0ff', glow: 'rgba(0, 240, 255, 0.45)', defaultVol: 0.92 },
+        { id: 'clap', name: 'Клэп', sub: 'CLAP', color: '#ff2a85', glow: 'rgba(255, 42, 133, 0.45)', defaultVol: 0.76 },
+        { id: 'hihat', name: 'Хэт', sub: 'HAT', color: '#ffb800', glow: 'rgba(255, 184, 0, 0.45)', defaultVol: 0.64 },
+        { id: 'perc', name: 'Перкуссия', sub: 'PERC', color: '#b8ff00', glow: 'rgba(184, 255, 0, 0.45)', defaultVol: 0.62 }
+      ];
+
+      // Преобразование MIDI-ноты в частоту (Гц)
+      function midiToFreq(midi) {
+        return 440 * Math.pow(2, (midi - 69) / 12);
+      }
+
+      // Вспомогательная функция создания пустого 16-шагового клипа (массив массивов ступеней 0..7)
+      function createEmptyClip() {
+        return Array.from({ length: 16 }, () => []);
+      }
+
+      // Конвертер компактной записи шагов вида { 0: [0,2,4], 4: [5] } в 16-шаговый клип
+      function buildClip(stepMap) {
+        const clip = createEmptyClip();
+        for (const [stepStr, notes] of Object.entries(stepMap)) {
+          const idx = Number(stepStr);
+          if (idx >= 0 && idx < 16) {
+            clip[idx] = Array.isArray(notes) ? [...notes] : [notes];
+          }
+        }
+        return clip;
+      }
+
+      /* =========================================================================
+       * 2. ПРЕСЕТЫ (4 УНИКАЛЬНЫХ ТЕХНО-ПОП ГРУВА С КЛИПАМИ A / B / C / D)
+       * ========================================================================= */
+      const PRESETS = {
+        berlin: {
+          name: 'Неоновый Берлин',
+          bpm: 126,
+          swing: 8,
+          scale: 'Am',
+          fx: { cutoff: 92, res: 14, delay: 30, reverb: 34, sidechain: 72 },
+          timbres: { lead: 'supersaw', arp: 'fm_pluck', pad: 'supersaw', bass: 'acid_saw' },
+          clips: {
+            lead: {
+              A: buildClip({ 0: [4], 3: [4], 6: [5], 8: [4], 10: [2], 12: [3], 14: [2] }),
+              B: buildClip({ 0: [7], 2: [6], 4: [4], 7: [5], 10: [4], 12: [2], 14: [0] }),
+              C: buildClip({ 2: [4], 4: [5], 6: [7], 10: [6], 12: [4], 15: [5] }),
+              D: buildClip({ 0: [0], 3: [2], 6: [4], 8: [7], 11: [6], 14: [4] })
+            },
+            arp: {
+              A: buildClip({ 0:[0], 1:[4], 2:[2], 3:[7], 4:[0], 5:[4], 6:[2], 7:[5], 8:[0], 9:[4], 10:[2], 11:[7], 12:[3], 13:[5], 14:[4], 15:[2] }),
+              B: buildClip({ 0:[0], 2:[4], 3:[7], 5:[6], 6:[4], 8:[0], 10:[2], 11:[5], 13:[4], 14:[2] }),
+              C: buildClip({ 0:[7], 1:[4], 2:[2], 3:[0], 4:[7], 5:[4], 6:[2], 7:[0], 8:[5], 9:[3], 10:[2], 11:[0], 12:[6], 13:[4], 14:[2], 15:[1] }),
+              D: buildClip({ 1:[4], 3:[7], 5:[4], 7:[6], 9:[4], 11:[7], 13:[5], 15:[4] })
+            },
+            pad: {
+              A: buildClip({ 0: [0, 2, 4], 8: [5, 0, 2], 12: [3, 5, 7] }),
+              B: buildClip({ 0: [0, 2, 4], 6: [2, 4, 6], 10: [3, 5, 7] }),
+              C: buildClip({ 0: [0, 4, 7], 8: [3, 5, 7] }),
+              D: buildClip({ 0: [5, 7, 2], 4: [4, 6, 1], 8: [2, 4, 7], 12: [3, 5, 7] })
+            },
+            bass: {
+              A: buildClip({ 0:[0], 2:[0], 3:[7], 4:[0], 6:[0], 7:[5], 8:[5], 10:[5], 11:[7], 12:[3], 14:[3], 15:[4] }),
+              B: buildClip({ 1:[0], 2:[0], 5:[0], 6:[7], 9:[5], 10:[5], 13:[3], 14:[4] }),
+              C: buildClip({ 0:[0], 1:[0], 2:[7], 4:[0], 5:[0], 6:[7], 8:[5], 9:[5], 10:[7], 12:[4], 14:[2], 15:[1] }),
+              D: buildClip({ 0:[0], 3:[0], 6:[0], 8:[5], 11:[5], 14:[3] })
+            }
+          },
+          drums: {
+            kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+            clap:  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+            hihat: [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,1],
+            perc:  [0,0,0,1, 0,0,0,0, 0,1,0,0, 0,0,1,0]
+          }
+        },
+
+        cyberdisco: {
+          name: 'Кибер-Диско',
+          bpm: 122,
+          swing: 16,
+          scale: 'Cm',
+          fx: { cutoff: 95, res: 12, delay: 24, reverb: 28, sidechain: 65 },
+          timbres: { lead: 'retro_square', arp: 'glass_bell', pad: 'fm_pluck', bass: 'sub_punch' },
+          clips: {
+            lead: {
+              A: buildClip({ 0:[7], 2:[5], 3:[4], 6:[2], 8:[4], 10:[5], 12:[7], 14:[6] }),
+              B: buildClip({ 0:[4], 3:[7], 6:[6], 8:[5], 11:[4], 14:[2] }),
+              C: buildClip({ 0:[2], 2:[4], 4:[7], 6:[7], 8:[5], 10:[4], 12:[2], 15:[0] }),
+              D: buildClip({ 2:[7], 5:[6], 7:[4], 10:[5], 13:[4], 15:[2] })
+            },
+            arp: {
+              A: buildClip({ 0:[0], 2:[4], 4:[7], 6:[4], 8:[2], 10:[5], 12:[7], 14:[6] }),
+              B: buildClip({ 1:[7], 3:[5], 5:[4], 7:[2], 9:[7], 11:[5], 13:[4], 15:[2] }),
+              C: buildClip({ 0:[0], 1:[2], 2:[4], 3:[7], 8:[3], 9:[5], 10:[7], 11:[6] }),
+              D: buildClip({ 0:[4], 3:[7], 6:[4], 9:[5], 12:[7], 15:[6] })
+            },
+            pad: {
+              A: buildClip({ 0:[0,2,4], 3:[0,2,4], 6:[2,4,6], 10:[3,5,7], 14:[2,4,6] }),
+              B: buildClip({ 2:[0,2,4], 6:[3,5,7], 10:[2,4,6], 14:[0,2,4] }),
+              C: buildClip({ 0:[0,4,7], 8:[2,5,7] }),
+              D: buildClip({ 0:[0,2,4], 4:[2,4,6], 8:[3,5,7], 12:[4,6,7] })
+            },
+            bass: {
+              A: buildClip({ 0:[0], 2:[7], 3:[0], 6:[2], 7:[3], 8:[3], 10:[7], 12:[4], 14:[2], 15:[1] }),
+              B: buildClip({ 0:[0], 3:[0], 4:[7], 6:[5], 8:[3], 11:[3], 12:[6], 14:[4] }),
+              C: buildClip({ 0:[0], 2:[0], 4:[2], 6:[3], 8:[4], 10:[5], 12:[6], 14:[7] }),
+              D: buildClip({ 0:[0], 2:[7], 4:[0], 6:[7], 8:[3], 10:[7], 12:[4], 14:[7] })
+            }
+          },
+          drums: {
+            kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,1,0],
+            clap:  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1],
+            hihat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1],
+            perc:  [0,0,0,0, 0,0,1,0, 0,0,0,1, 0,1,0,0]
+          }
+        },
+
+        retrowave: {
+          name: 'Ретро-Волна',
+          bpm: 116,
+          swing: 4,
+          scale: 'Em',
+          fx: { cutoff: 86, res: 18, delay: 42, reverb: 48, sidechain: 58 },
+          timbres: { lead: 'retro_square', arp: 'supersaw', pad: 'supersaw', bass: 'retro_square' },
+          clips: {
+            lead: {
+              A: buildClip({ 0:[4], 4:[5], 6:[7], 8:[6], 12:[4], 14:[2] }),
+              B: buildClip({ 0:[7], 3:[6], 6:[4], 8:[2], 11:[4], 14:[5] }),
+              C: buildClip({ 0:[2], 2:[4], 6:[5], 10:[4], 12:[2], 14:[0] }),
+              D: buildClip({ 0:[7], 4:[7], 6:[6], 8:[4], 12:[5], 14:[4] })
+            },
+            arp: {
+              A: buildClip({ 0:[0], 1:[2], 2:[4], 3:[7], 4:[4], 5:[2], 6:[0], 7:[2], 8:[5], 9:[4], 10:[2], 11:[0], 12:[3], 13:[5], 14:[7], 15:[5] }),
+              B: buildClip({ 0:[0], 2:[4], 4:[7], 6:[4], 8:[5], 10:[2], 12:[3], 14:[5] }),
+              C: buildClip({ 0:[7], 2:[6], 4:[4], 6:[2], 8:[4], 10:[5], 12:[7], 14:[4] }),
+              D: buildClip({ 0:[0], 1:[4], 2:[7], 4:[0], 5:[4], 6:[7], 8:[3], 9:[5], 10:[7], 12:[2], 13:[4], 14:[6] })
+            },
+            pad: {
+              A: buildClip({ 0:[0,2,4], 8:[5,7,2] }),
+              B: buildClip({ 0:[3,5,7], 8:[2,4,6] }),
+              C: buildClip({ 0:[0,2,4], 4:[0,4,7], 8:[3,5,7], 12:[2,4,6] }),
+              D: buildClip({ 0:[0,4,7], 8:[5,0,2] })
+            },
+            bass: {
+              A: buildClip({ 0:[0], 1:[0], 2:[0], 3:[0], 4:[0], 5:[0], 6:[2], 7:[2], 8:[5], 9:[5], 10:[5], 11:[5], 12:[3], 13:[3], 14:[4], 15:[4] }),
+              B: buildClip({ 0:[0], 2:[0], 4:[0], 6:[0], 8:[5], 10:[5], 12:[3], 14:[4] }),
+              C: buildClip({ 0:[0], 1:[0], 2:[7], 3:[0], 4:[0], 5:[0], 6:[7], 7:[0], 8:[5], 9:[5], 10:[7], 11:[5], 12:[3], 13:[3], 14:[5], 15:[4] }),
+              D: buildClip({ 0:[0], 4:[0], 8:[5], 12:[3] })
+            }
+          },
+          drums: {
+            kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+            clap:  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+            hihat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],
+            perc:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,1]
+          }
+        },
+
+        nightpulse: {
+          name: 'Ночной Пульс',
+          bpm: 134,
+          swing: 6,
+          scale: 'F#m',
+          fx: { cutoff: 88, res: 24, delay: 36, reverb: 30, sidechain: 82 },
+          timbres: { lead: 'fm_pluck', arp: 'supersaw', pad: 'glass_bell', bass: 'acid_saw' },
+          clips: {
+            lead: {
+              A: buildClip({ 0:[0], 2:[0], 3:[4], 6:[2], 8:[0], 10:[7], 11:[6], 14:[4] }),
+              B: buildClip({ 0:[4], 2:[4], 4:[7], 6:[6], 8:[4], 10:[2], 12:[3], 14:[2] }),
+              C: buildClip({ 1:[7], 3:[7], 5:[6], 7:[4], 9:[5], 11:[4], 13:[2], 15:[0] }),
+              D: buildClip({ 0:[0], 3:[4], 6:[7], 9:[6], 12:[4], 15:[2] })
+            },
+            arp: {
+              A: buildClip({ 0:[0], 1:[0], 2:[4], 3:[7], 4:[0], 5:[0], 6:[5], 7:[4], 8:[0], 9:[0], 10:[4], 11:[7], 12:[2], 13:[4], 14:[6], 15:[7] }),
+              B: buildClip({ 0:[7], 1:[4], 2:[7], 3:[4], 4:[6], 5:[4], 6:[6], 7:[4], 8:[5], 9:[2], 10:[5], 11:[2], 12:[4], 13:[2], 14:[3], 15:[1] }),
+              C: buildClip({ 0:[0], 2:[4], 3:[7], 4:[0], 6:[5], 7:[4], 8:[0], 10:[4], 11:[7], 12:[3], 14:[5], 15:[6] }),
+              D: buildClip({ 1:[4], 2:[7], 5:[4], 6:[7], 9:[5], 10:[7], 13:[6], 14:[7] })
+            },
+            pad: {
+              A: buildClip({ 0:[0,4,7], 8:[0,3,5], 12:[1,4,6] }),
+              B: buildClip({ 0:[0,2,4], 6:[0,2,4], 12:[3,5,7] }),
+              C: buildClip({ 0:[0,4,7], 4:[2,4,7], 8:[3,5,7], 12:[2,4,6] }),
+              D: buildClip({ 0:[0,4], 8:[5,7] })
+            },
+            bass: {
+              A: buildClip({ 0:[0], 1:[0], 2:[7], 3:[0], 4:[0], 5:[0], 6:[7], 7:[2], 8:[0], 9:[0], 10:[7], 11:[0], 12:[5], 13:[5], 14:[4], 15:[2] }),
+              B: buildClip({ 1:[0], 2:[0], 3:[7], 5:[0], 6:[0], 7:[5], 9:[0], 10:[0], 11:[7], 13:[3], 14:[4], 15:[2] }),
+              C: buildClip({ 0:[0], 2:[0], 4:[0], 6:[7], 8:[5], 10:[5], 12:[3], 14:[4] }),
+              D: buildClip({ 0:[0], 1:[7], 2:[0], 3:[7], 4:[0], 5:[7], 6:[5], 7:[4], 8:[0], 9:[7], 10:[0], 11:[7], 12:[3], 13:[5], 14:[4], 15:[2] })
+            }
+          },
+          drums: {
+            kick:  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+            clap:  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+            hihat: [1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,1],
+            perc:  [0,0,0,1, 0,0,1,0, 0,0,0,1, 0,1,0,0]
+          }
+        }
+      };
+
+      /* =========================================================================
+       * 3. СОСТОЯНИЕ ПРИЛОЖЕНИЯ (STATE)
+       * ========================================================================= */
+      const state = {
+        isPlaying: false,
+        bpm: 126,
+        swing: 8,
+        scale: 'Am',
+        preset: 'berlin',
+        selectedTrackId: 'lead',
+        currentVisualStep: -1,
+
+        // Параметры FX и мастера
+        fx: {
+          cutoff: 92,    // 0..100 (логарифмически в Гц)
+          res: 14,       // 0..100 (0.5..18 Q)
+          delay: 30,     // 0..100
+          reverb: 34,    // 0..100
+          sidechain: 72, // 0..100
+          master: 85     // 0..100
+        },
+
+        // Состояние XY-пэда
+        xy: {
+          active: false,
+          latch: false,
+          x: 0.92,
+          y: 0.14,
+          trail: []
+        },
+
+        // Состояние лайв-пэдов
+        live: {
+          hpfBreak: false,
+          glitch: false,
+          glitchAnchor: 0,
+          glitchCounter: 0
+        },
+
+        // Мелодические дорожки
+        tracks: {},
+
+        // Ударные дорожки
+        drums: {},
+
+        // Рисование перетаскиванием по сеткам
+        drag: {
+          active: false,
+          type: null, // 'piano' | 'drum'
+          mode: true, // true = рисовать, false = стирать
+          lastKey: ''
+        },
+
+        // Запись аудио
+        recording: {
+          active: false,
+          recorder: null,
+          chunks: [],
+          startTime: 0,
+          timerId: null
+        }
+      };
+
+      // Инициализация структур треков
+      function initTrackStructures() {
+        TRACK_META.forEach(meta => {
+          state.tracks[meta.id] = {
+            id: meta.id,
+            volume: meta.defaultVol,
+            muted: false,
+            solo: false,
+            timbre: meta.defaultTimbre,
+            activeClip: 'A',
+            clips: {
+              A: createEmptyClip(),
+              B: createEmptyClip(),
+              C: createEmptyClip(),
+              D: createEmptyClip()
+            }
+          };
+        });
+
+        DRUM_META.forEach(meta => {
+          state.drums[meta.id] = {
+            id: meta.id,
+            volume: meta.defaultVol,
+            muted: false,
+            steps: Array(16).fill(0)
+          };
+        });
+      }
+
+      function cloneClip(clip) {
+        return clip.map(stepNotes => [...stepNotes]);
+      }
+
+      /* =========================================================================
+       * 4. АУДИО-ДВИЖОК (100% PURE WEB AUDIO API SYNTHESIS)
+       * ========================================================================= */
+      let audioCtx = null;
+      let masterGain = null;
+      let masterCompressor = null;
+      let masterFilter = null;
+      let hpfBreakFilter = null;
+      let sidechainGain = null;
+      let leadSidechainGain = null;
+      let delaySendGain = null;
+      let delayNodeL = null;
+      let delayNodeR = null;
+      let delayFeedbackL = null;
+      let delayFeedbackR = null;
+      let reverbSendGain = null;
+      let reverbConvolver = null;
+      let analyserNode = null;
+      let mediaStreamDest = null;
+      let noiseBuffer = null;
+
+      // Очередь для синхронизации визуального плейхеда с точным временем AudioContext
+      const visualStepQueue = [];
+      let schedulerTimer = null;
+      let nextNoteTime = 0;
+      let currentStep = 0;
+      const LOOKAHEAD_MS = 25;
+      const SCHEDULE_AHEAD_SEC = 0.12;
+
+      // Создание буфера белого шума (для ударных и райзера)
+      function createNoiseBuffer(ctx) {
+        const bufferSize = ctx.sampleRate * 2.5;
+        const buffer = ctx.createBuffer(2, bufferSize, ctx.sampleRate);
+        for (let ch = 0; ch < 2; ch++) {
+          const data = buffer.getChannelData(ch);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+          }
+        }
+        return buffer;
+      }
+
+      // Алгоритмический стерео-импульс для реверберации (Lush Club Hall)
+      function createReverbImpulse(ctx, duration = 2.4, decay = 2.6) {
+        const length = Math.floor(ctx.sampleRate * duration);
+        const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+        for (let ch = 0; ch < 2; ch++) {
+          const data = impulse.getChannelData(ch);
+          let lp = 0;
+          for (let i = 0; i < length; i++) {
+            const t = i / length;
+            // Плавная атака + экспоненциальный хвост с мягким срезом высоких
+            const env = Math.pow(1 - t, decay) * Math.min(1, i / (ctx.sampleRate * 0.015));
+            const white = Math.random() * 2 - 1;
+            lp = lp * 0.65 + white * 0.35;
+            data[i] = lp * env;
+          }
+        }
+        return impulse;
+      }
+
+      // Преобразование 0..100 в частоту среза LPF (160 Гц .. 18000 Гц)
+      function cutoffPercentToHz(val) {
+        const norm = Math.max(0, Math.min(100, val)) / 100;
+        return 160 * Math.pow(18000 / 160, norm);
+      }
+
+      // Инициализация Web Audio графа при первом взаимодействии
+      function ensureAudio() {
+        try {
+          if (!audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContextClass();
+
+            noiseBuffer = createNoiseBuffer(audioCtx);
+
+            // Шины сайдчейна
+            sidechainGain = audioCtx.createGain();
+            sidechainGain.gain.value = 1.0;
+
+            leadSidechainGain = audioCtx.createGain();
+            leadSidechainGain.gain.value = 1.0;
+
+            // Мастер LPF фильтр (управляется слайдером и XY-пэдом)
+            masterFilter = audioCtx.createBiquadFilter();
+            masterFilter.type = 'lowpass';
+            masterFilter.frequency.value = cutoffPercentToHz(state.fx.cutoff);
+            masterFilter.Q.value = 0.7 + (state.fx.res / 100) * 14;
+
+            // DJ HPF Брейк фильтр (в обычном режиме прозрачен: 20 Гц)
+            hpfBreakFilter = audioCtx.createBiquadFilter();
+            hpfBreakFilter.type = 'highpass';
+            hpfBreakFilter.frequency.value = 20;
+            hpfBreakFilter.Q.value = 0.7;
+
+            // Компрессор/Лимитер на выходе (предотвращает клиппинг и склеивает микс)
+            masterCompressor = audioCtx.createDynamicsCompressor();
+            masterCompressor.threshold.value = -14;
+            masterCompressor.knee.value = 16;
+            masterCompressor.ratio.value = 5;
+            masterCompressor.attack.value = 0.004;
+            masterCompressor.release.value = 0.14;
+
+            // Мастер-громкость
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = (state.fx.master / 100) * 0.9;
+
+            // Анализатор для визуализатора
+            analyserNode = audioCtx.createAnalyser();
+            analyserNode.fftSize = 1024;
+            analyserNode.smoothingTimeConstant = 0.82;
+
+            // Стерео пинг-понг дилей (синхронизирован с BPM)
+            delaySendGain = audioCtx.createGain();
+            delaySendGain.gain.value = (state.fx.delay / 100) * 0.55;
+
+            delayNodeL = audioCtx.createDelay(2.0);
+            delayNodeR = audioCtx.createDelay(2.0);
+            const delayTime = (60 / state.bpm) * 0.75; // пунктирная 1/8
+            delayNodeL.delayTime.value = delayTime;
+            delayNodeR.delayTime.value = delayTime * 0.66;
+
+            delayFeedbackL = audioCtx.createGain();
+            delayFeedbackR = audioCtx.createGain();
+            delayFeedbackL.gain.value = 0.36;
+            delayFeedbackR.gain.value = 0.36;
+
+            const delayTone = audioCtx.createBiquadFilter();
+            delayTone.type = 'lowpass';
+            delayTone.frequency.value = 3400;
+
+            const panL = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+            const panR = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+            if (panL && panR) {
+              panL.pan.value = -0.65;
+              panR.pan.value = 0.65;
+            }
+
+            // Алгоритмический реверб
+            reverbSendGain = audioCtx.createGain();
+            reverbSendGain.gain.value = (state.fx.reverb / 100) * 0.58;
+
+            reverbConvolver = audioCtx.createConvolver();
+            reverbConvolver.buffer = createReverbImpulse(audioCtx, 2.3, 2.5);
+
+            const reverbTone = audioCtx.createBiquadFilter();
+            reverbTone.type = 'highpass';
+            reverbTone.frequency.value = 240;
+
+            // Соединение шин
+            sidechainGain.connect(masterFilter);
+            leadSidechainGain.connect(masterFilter);
+            masterFilter.connect(hpfBreakFilter);
+
+            // Сухой сигнал -> компрессор
+            hpfBreakFilter.connect(masterCompressor);
+
+            // Посыл на Дилей
+            hpfBreakFilter.connect(delaySendGain);
+            delaySendGain.connect(delayTone);
+            delayTone.connect(delayNodeL);
+            delayNodeL.connect(delayFeedbackL);
+            delayFeedbackL.connect(delayNodeR);
+            delayNodeR.connect(delayFeedbackR);
+            delayFeedbackR.connect(delayNodeL);
+
+            if (panL && panR) {
+              delayNodeL.connect(panL);
+              delayNodeR.connect(panR);
+              panL.connect(masterCompressor);
+              panR.connect(masterCompressor);
+            } else {
+              delayNodeL.connect(masterCompressor);
+              delayNodeR.connect(masterCompressor);
+            }
+
+            // Посыл на Реверб
+            hpfBreakFilter.connect(reverbSendGain);
+            reverbSendGain.connect(reverbConvolver);
+            reverbConvolver.connect(reverbTone);
+            reverbTone.connect(masterCompressor);
+
+            // Выход и запись
+            masterCompressor.connect(masterGain);
+            masterGain.connect(analyserNode);
+            analyserNode.connect(audioCtx.destination);
+
+            if (audioCtx.createMediaStreamDestination) {
+              mediaStreamDest = audioCtx.createMediaStreamDestination();
+              masterGain.connect(mediaStreamDest);
+            }
+
+            updateAudioFXParams();
+          }
+
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+          return true;
+        } catch (err) {
+          console.error('Ошибка инициализации Web Audio API:', err);
+          showToast('Не удалось запустить аудио-движок браузера', 'error');
+          return false;
+        }
+      }
+
+      // Плавное обновление параметров FX без щелчков
+      function updateAudioFXParams() {
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+
+        // Если активен XY-пэд или фиксация, используем значения XY для фильтра и фидбэка
+        const cutoffPercent = (state.xy.active || state.xy.latch) ? state.xy.x * 100 : state.fx.cutoff;
+        const resPercent = (state.xy.active || state.xy.latch) ? state.xy.y * 100 : state.fx.res;
+
+        const targetCutoff = cutoffPercentToHz(cutoffPercent);
+        const targetQ = 0.6 + Math.pow(resPercent / 100, 1.35) * 16;
+
+        masterFilter.frequency.setTargetAtTime(targetCutoff, now, 0.025);
+        masterFilter.Q.setTargetAtTime(targetQ, now, 0.025);
+
+        // Дилей и фидбэк
+        const baseDelaySend = (state.fx.delay / 100) * 0.52;
+        const xyBoost = (state.xy.active || state.xy.latch) ? state.xy.y * 0.35 : 0;
+        delaySendGain.gain.setTargetAtTime(Math.min(0.85, baseDelaySend + xyBoost), now, 0.03);
+
+        const fb = Math.min(0.76, 0.24 + (state.fx.delay / 100) * 0.25 + ((state.xy.active || state.xy.latch) ? state.xy.y * 0.32 : 0));
+        delayFeedbackL.gain.setTargetAtTime(fb, now, 0.03);
+        delayFeedbackR.gain.setTargetAtTime(fb, now, 0.03);
+
+        // Синхронизация времени дилея с BPM
+        const dottedEighth = (60 / state.bpm) * 0.75;
+        delayNodeL.delayTime.setTargetAtTime(dottedEighth, now, 0.06);
+        delayNodeR.delayTime.setTargetAtTime(dottedEighth * 0.666, now, 0.06);
+
+        // Реверб и Мастер
+        reverbSendGain.gain.setTargetAtTime((state.fx.reverb / 100) * 0.62, now, 0.03);
+        masterGain.gain.setTargetAtTime((state.fx.master / 100) * 0.92, now, 0.02);
+
+        // HPF Брейк
+        if (state.live.hpfBreak) {
+          hpfBreakFilter.frequency.setTargetAtTime(680, now, 0.03);
+          hpfBreakFilter.Q.setTargetAtTime(3.6, now, 0.03);
+        } else {
+          hpfBreakFilter.frequency.setTargetAtTime(20, now, 0.04);
+          hpfBreakFilter.Q.setTargetAtTime(0.7, now, 0.04);
+        }
+      }
+
+      /* =========================================================================
+       * 5. ГОЛОСА СИНТЕЗАТОРОВ (MELODIC SYNTHS)
+       * ========================================================================= */
+      function triggerMelodicNote(trackId, degree, time, stepDur, isPreview = false) {
+        if (!audioCtx) return;
+
+        const meta = TRACK_META.find(t => t.id === trackId);
+        const track = state.tracks[trackId];
+        if (!meta || !track) return;
+
+        // Вычисляем частоту с учетом выбранной тональности и октавы дорожки
+        const scaleObj = SCALES[state.scale] || SCALES['Am'];
+        const semitone = scaleObj.intervals[Math.max(0, Math.min(7, degree))];
+        const midi = scaleObj.rootMidi + meta.octaveOffset + semitone;
+        const freq = midiToFreq(midi);
+
+        const vol = (isPreview ? Math.max(0.45, track.volume) : track.volume) * 0.24;
+        if (vol <= 0.001) return;
+
+        const timbre = track.timbre;
+        // Выбор шины (Pad, Arp, Bass идут через полный сайдчейн, Lead — через легкий сайдчейн)
+        const dest = (trackId === 'lead') ? leadSidechainGain : sidechainGain;
+
+        const noteGain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+
+        noteGain.connect(dest);
+        filter.connect(noteGain);
+
+        // Длительность звучания зависит от роли дорожки
+        let duration = stepDur * 1.15;
+        if (trackId === 'pad') duration = stepDur * 4.5;
+        else if (trackId === 'lead') duration = stepDur * 1.9;
+        else if (trackId === 'bass') duration = stepDur * 0.92;
+        else if (trackId === 'arp') duration = stepDur * 0.85;
+
+        const attack = (trackId === 'pad') ? 0.055 : 0.007;
+        const release = (trackId === 'pad') ? 0.35 : 0.09;
+        const endTime = time + duration + release;
+
+        // Огибающая громкости (без щелчков)
+        noteGain.gain.setValueAtTime(0.0001, time);
+        noteGain.gain.linearRampToValueAtTime(vol, time + attack);
+        noteGain.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol * 0.55), time + duration);
+        noteGain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+        // Выбор архитектуры тембра
+        if (timbre === 'supersaw') {
+          const detunes = [-14, 0, 14];
+          const baseCut = trackId === 'pad' ? 2400 : 5200;
+          filter.frequency.setValueAtTime(baseCut * 1.6, time);
+          filter.frequency.exponentialRampToValueAtTime(Math.max(350, baseCut * 0.45), time + duration);
+          filter.Q.value = trackId === 'pad' ? 1.2 : 2.4;
+
+          detunes.forEach(dt => {
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, time);
+            osc.detune.setValueAtTime(dt, time);
+            const g = audioCtx.createGain();
+            g.gain.value = 0.42;
+            osc.connect(g);
+            g.connect(filter);
+            osc.start(time);
+            osc.stop(endTime + 0.02);
+          });
+        } else if (timbre === 'fm_pluck') {
+          const carrier = audioCtx.createOscillator();
+          const mod = audioCtx.createOscillator();
+          const modGain = audioCtx.createGain();
+
+          carrier.type = 'sine';
+          mod.type = 'triangle';
+          carrier.frequency.setValueAtTime(freq, time);
+          mod.frequency.setValueAtTime(freq * 2.0, time);
+
+          modGain.gain.setValueAtTime(freq * 3.8, time);
+          modGain.gain.exponentialRampToValueAtTime(0.5, time + Math.min(0.28, duration));
+
+          filter.frequency.setValueAtTime(6800, time);
+          filter.frequency.exponentialRampToValueAtTime(1100, time + duration);
+          filter.Q.value = 1.6;
+
+          mod.connect(modGain);
+          modGain.connect(carrier.frequency);
+          carrier.connect(filter);
+
+          carrier.start(time);
+          mod.start(time);
+          carrier.stop(endTime + 0.02);
+          mod.stop(endTime + 0.02);
+        } else if (timbre === 'acid_saw') {
+          const osc = audioCtx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, time);
+
+          // Фирменный TB-303 резонансный фильтр
+          filter.frequency.setValueAtTime(Math.min(7000, freq * 14), time);
+          filter.frequency.exponentialRampToValueAtTime(Math.max(140, freq * 2.1), time + Math.min(0.22, duration));
+          filter.Q.value = 7.5;
+
+          osc.connect(filter);
+          osc.start(time);
+          osc.stop(endTime + 0.02);
+        } else if (timbre === 'retro_square') {
+          const osc1 = audioCtx.createOscillator();
+          const osc2 = audioCtx.createOscillator();
+          osc1.type = 'square';
+          osc2.type = 'triangle';
+          osc1.frequency.setValueAtTime(freq, time);
+          osc2.frequency.setValueAtTime(freq * 0.5, time); // суб-октава для плотности
+          osc1.detune.setValueAtTime(5, time);
+
+          const g1 = audioCtx.createGain();
+          const g2 = audioCtx.createGain();
+          g1.gain.value = 0.5;
+          g2.gain.value = 0.45;
+
+          filter.frequency.setValueAtTime(3800, time);
+          filter.frequency.exponentialRampToValueAtTime(950, time + duration);
+          filter.Q.value = 2.0;
+
+          osc1.connect(g1); g1.connect(filter);
+          osc2.connect(g2); g2.connect(filter);
+          osc1.start(time); osc2.start(time);
+          osc1.stop(endTime + 0.02); osc2.stop(endTime + 0.02);
+        } else if (timbre === 'glass_bell') {
+          const osc1 = audioCtx.createOscillator();
+          const osc2 = audioCtx.createOscillator();
+          osc1.type = 'sine';
+          osc2.type = 'sine';
+          osc1.frequency.setValueAtTime(freq, time);
+          osc2.frequency.setValueAtTime(freq * 3.0, time);
+
+          const g2 = audioCtx.createGain();
+          g2.gain.setValueAtTime(0.35, time);
+          g2.gain.exponentialRampToValueAtTime(0.001, time + Math.min(0.25, duration));
+
+          filter.frequency.setValueAtTime(9000, time);
+          osc1.connect(filter);
+          osc2.connect(g2); g2.connect(filter);
+
+          osc1.start(time); osc2.start(time);
+          osc1.stop(endTime + 0.02); osc2.stop(endTime + 0.02);
+        } else {
+          // sub_punch
+          const oscSub = audioCtx.createOscillator();
+          const oscMid = audioCtx.createOscillator();
+          oscSub.type = 'sine';
+          oscMid.type = 'sawtooth';
+          oscSub.frequency.setValueAtTime(freq * 1.12, time);
+          oscSub.frequency.exponentialRampToValueAtTime(freq, time + 0.025);
+          oscMid.frequency.setValueAtTime(freq, time);
+
+          const gMid = audioCtx.createGain();
+          gMid.gain.value = 0.35;
+          filter.frequency.setValueAtTime(1400, time);
+          filter.frequency.exponentialRampToValueAtTime(280, time + duration);
+          filter.Q.value = 2.2;
+
+          oscSub.connect(noteGain); // чистый саб мимо фильтра для панча
+          oscMid.connect(gMid);
+          gMid.connect(filter);
+
+          oscSub.start(time); oscMid.start(time);
+          oscSub.stop(endTime + 0.02); oscMid.stop(endTime + 0.02);
+        }
+      }
+
+      /* =========================================================================
+       * 6. СИНТЕЗ УДАРНЫХ (909 KICK, STEREO CLAP, METALLIC HI-HAT, SYNTH PERC)
+       * ========================================================================= */
+      function triggerDrum(drumId, time, stepIndex) {
+        if (!audioCtx) return;
+        const drum = state.drums[drumId];
+        if (!drum || drum.muted || drum.volume <= 0.001) return;
+
+        const vol = drum.volume;
+
+        if (drumId === 'kick') {
+          // Плотная техно-бочка 909
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(158, time);
+          osc.frequency.exponentialRampToValueAtTime(48, time + 0.048);
+          osc.frequency.exponentialRampToValueAtTime(34, time + 0.28);
+
+          gain.gain.setValueAtTime(0.001, time);
+          gain.gain.linearRampToValueAtTime(vol * 0.95, time + 0.004);
+          gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.32);
+
+          // Щелчок атаки для читаемости в миксе
+          const clickOsc = audioCtx.createOscillator();
+          const clickGain = audioCtx.createGain();
+          clickOsc.type = 'triangle';
+          clickOsc.frequency.setValueAtTime(950, time);
+          clickOsc.frequency.exponentialRampToValueAtTime(120, time + 0.015);
+          clickGain.gain.setValueAtTime(vol * 0.35, time);
+          clickGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.018);
+
+          osc.connect(gain);
+          clickOsc.connect(clickGain);
+          gain.connect(masterFilter);
+          clickGain.connect(masterFilter);
+
+          osc.start(time);
+          clickOsc.start(time);
+          osc.stop(time + 0.34);
+          clickOsc.stop(time + 0.025);
+
+        } else if (drumId === 'clap') {
+          // Многослойный клубный клэп (3 микро-удара + хвост)
+          const offsets = [0, 0.011, 0.022, 0.032];
+          offsets.forEach((off, idx) => {
+            const src = audioCtx.createBufferSource();
+            src.buffer = noiseBuffer;
+
+            const bp = audioCtx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.frequency.value = idx === 3 ? 1350 : 1750;
+            bp.Q.value = idx === 3 ? 1.1 : 2.0;
+
+            const g = audioCtx.createGain();
+            const isTail = idx === 3;
+            const peak = vol * (isTail ? 0.55 : 0.42);
+            const dur = isTail ? 0.19 : 0.018;
+
+            g.gain.setValueAtTime(0.0001, time + off);
+            g.gain.linearRampToValueAtTime(peak, time + off + 0.002);
+            g.gain.exponentialRampToValueAtTime(0.0001, time + off + dur);
+
+            src.connect(bp);
+            bp.connect(g);
+            g.connect(masterFilter);
+
+            src.start(time + off, Math.random() * 0.5, dur + 0.02);
+          });
+
+        } else if (drumId === 'hihat') {
+          // Четкий металлический хэт (длиннее на слабой доле)
+          const isOffbeat = (stepIndex % 4 === 2);
+          const dur = isOffbeat ? 0.14 : 0.048;
+
+          const src = audioCtx.createBufferSource();
+          src.buffer = noiseBuffer;
+
+          const hp = audioCtx.createBiquadFilter();
+          hp.type = 'highpass';
+          hp.frequency.value = isOffbeat ? 7200 : 8800;
+
+          const g = audioCtx.createGain();
+          g.gain.setValueAtTime(0.0001, time);
+          g.gain.linearRampToValueAtTime(vol * (isOffbeat ? 0.36 : 0.25), time + 0.002);
+          g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+          src.connect(hp);
+          hp.connect(g);
+          g.connect(masterFilter);
+
+          src.start(time, Math.random() * 1.0, dur + 0.02);
+
+        } else if (drumId === 'perc') {
+          // Синтезированная перкуссия / электро-том
+          const osc = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          const basePitch = (stepIndex % 2 === 0) ? 310 : 420;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(basePitch * 1.5, time);
+          osc.frequency.exponentialRampToValueAtTime(basePitch * 0.65, time + 0.09);
+
+          g.gain.setValueAtTime(0.0001, time);
+          g.gain.linearRampToValueAtTime(vol * 0.48, time + 0.003);
+          g.gain.exponentialRampToValueAtTime(0.0001, time + 0.11);
+
+          osc.connect(g);
+          g.connect(masterFilter);
+          osc.start(time);
+          osc.stop(time + 0.12);
+        }
+      }
+
+      /* =========================================================================
+       * 7. САЙДЧЕЙН-ПАМП И ЛАЙВ-ЭФФЕКТЫ (РАЙЗЕР, ДРОП, HPF БРЕЙК, ГЛИТЧ)
+       * ========================================================================= */
+      function triggerSidechainPump(time) {
+        if (!audioCtx || !sidechainGain) return;
+        const depth = state.fx.sidechain / 100;
+        if (depth <= 0.02) {
+          sidechainGain.gain.setTargetAtTime(1.0, time, 0.02);
+          leadSidechainGain.gain.setTargetAtTime(1.0, time, 0.02);
+          return;
+        }
+
+        const beatDur = 60 / state.bpm;
+        const minGain = Math.max(0.06, 1.0 - depth * 0.92);
+        const leadMinGain = Math.max(0.45, 1.0 - depth * 0.45);
+
+        // Полный кач для Pad, Arp и Bass
+        sidechainGain.gain.cancelScheduledValues(time);
+        sidechainGain.gain.setValueAtTime(sidechainGain.gain.value, time);
+        sidechainGain.gain.linearRampToValueAtTime(minGain, time + 0.008);
+        sidechainGain.gain.exponentialRampToValueAtTime(1.0, time + beatDur * 0.88);
+
+        // Мягкий кач для Lead
+        leadSidechainGain.gain.cancelScheduledValues(time);
+        leadSidechainGain.gain.setValueAtTime(leadSidechainGain.gain.value, time);
+        leadSidechainGain.gain.linearRampToValueAtTime(leadMinGain, time + 0.008);
+        leadSidechainGain.gain.exponentialRampToValueAtTime(1.0, time + beatDur * 0.8);
+      }
+
+      // Лайв-эффект: РАЙЗЕР (шумовой свип + восходящий синт)
+      function triggerRiserFX() {
+        if (!ensureAudio()) return;
+        const now = audioCtx.currentTime;
+        const dur = (60 / state.bpm) * 4; // ровно 1 такт
+
+        // 1. Белый шум с открытием полосового фильтра
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        const bp = audioCtx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.Q.value = 3.2;
+        bp.frequency.setValueAtTime(250, now);
+        bp.frequency.exponentialRampToValueAtTime(9500, now + dur);
+
+        const nGain = audioCtx.createGain();
+        nGain.gain.setValueAtTime(0.001, now);
+        nGain.gain.exponentialRampToValueAtTime(0.45, now + dur * 0.92);
+        nGain.gain.exponentialRampToValueAtTime(0.0001, now + dur + 0.06);
+
+        noise.connect(bp);
+        bp.connect(nGain);
+        nGain.connect(masterCompressor);
+        noise.start(now);
+        noise.stop(now + dur + 0.08);
+
+        // 2. Восходящий синт-разгон
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sawtooth';
+        const scaleObj = SCALES[state.scale] || SCALES['Am'];
+        const startFreq = midiToFreq(scaleObj.rootMidi);
+        osc.frequency.setValueAtTime(startFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(startFreq * 4, now + dur);
+
+        const oGain = audioCtx.createGain();
+        oGain.gain.setValueAtTime(0.001, now);
+        oGain.gain.linearRampToValueAtTime(0.16, now + dur * 0.9);
+        oGain.gain.exponentialRampToValueAtTime(0.0001, now + dur + 0.05);
+
+        osc.connect(oGain);
+        oGain.connect(reverbSendGain);
+        oGain.connect(masterCompressor);
+        osc.start(now);
+        osc.stop(now + dur + 0.06);
+      }
+
+      // Лайв-эффект: ДРОП (саб-удар + шиммер)
+      function triggerDropFX() {
+        if (!ensureAudio()) return;
+        const now = audioCtx.currentTime;
+
+        // Глубокий 808/Sub бум
+        const sub = audioCtx.createOscillator();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(115, now);
+        sub.frequency.exponentialRampToValueAtTime(30, now + 0.95);
+
+        const sGain = audioCtx.createGain();
+        sGain.gain.setValueAtTime(0.001, now);
+        sGain.gain.linearRampToValueAtTime(0.85, now + 0.008);
+        sGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
+
+        sub.connect(sGain);
+        sGain.connect(masterCompressor);
+        sub.start(now);
+        sub.stop(now + 1.15);
+
+        // Взрывной шиммер шума
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        const lp = audioCtx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(12000, now);
+        lp.frequency.exponentialRampToValueAtTime(300, now + 1.2);
+
+        const nGain = audioCtx.createGain();
+        nGain.gain.setValueAtTime(0.5, now);
+        nGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.25);
+
+        noise.connect(lp);
+        lp.connect(nGain);
+        nGain.connect(reverbSendGain);
+        nGain.connect(masterCompressor);
+        noise.start(now);
+        noise.stop(now + 1.3);
+      }
+
+      /* =========================================================================
+       * 8. ТОЧНЫЙ LOOKAHEAD-СЕКВЕНСОР (16 ШАГОВ, 1/16 НОТЫ + СВИНГ + ГЛИТЧ)
+       * ========================================================================= */
+      function getStepDuration() {
+        return (60 / state.bpm) / 4; // 16-я нота
+      }
+
+      function scheduleStep(stepIndex, time) {
+        const stepDur = getStepDuration();
+
+        // Определяем реальный проигрываемый шаг (учитывая режим ГЛИТЧ 1/8)
+        let activeStep = stepIndex;
+        if (state.live.glitch) {
+          activeStep = (state.live.glitchAnchor + (state.live.glitchCounter % 2)) % 16;
+          state.live.glitchCounter++;
+        }
+
+        // Кладем шаг в очередь для точной отрисовки плейхеда
+        visualStepQueue.push({ step: activeStep, time });
+
+        // Сайдчейн-памп на каждую четвертную долю (0, 4, 8, 12) или на каждый глитч-повтор
+        if (activeStep % 4 === 0) {
+          triggerSidechainPump(time);
+        }
+
+        // Проверка режима Solo среди мелодических дорожек
+        const anySolo = TRACK_META.some(m => state.tracks[m.id].solo);
+
+        // Запуск мелодических дорожек
+        TRACK_META.forEach(meta => {
+          const tr = state.tracks[meta.id];
+          const isAudible = anySolo ? tr.solo : !tr.muted;
+          if (!isAudible) return;
+
+          const clip = tr.clips[tr.activeClip];
+          const notes = clip[activeStep];
+          if (notes && notes.length > 0) {
+            notes.forEach(degree => {
+              triggerMelodicNote(meta.id, degree, time, stepDur, false);
+            });
+          }
+        });
+
+        // Запуск ударных
+        DRUM_META.forEach(meta => {
+          const dr = state.drums[meta.id];
+          if (dr.steps[activeStep]) {
+            triggerDrum(meta.id, time, activeStep);
+          }
+        });
+      }
+
+      function advanceNote() {
+        const baseStepDur = getStepDuration();
+        const swingRatio = (state.swing / 100) * 0.6;
+        // Сдвигаем нечетные 16-е доли для грувового свинга
+        const isCurrentEven = (currentStep % 2 === 0);
+        const stepDurWithSwing = isCurrentEven
+          ? baseStepDur * (1 + swingRatio)
+          : baseStepDur * (1 - swingRatio);
+
+        nextNoteTime += stepDurWithSwing;
+        currentStep = (currentStep + 1) % 16;
+      }
+
+      function schedulerTick() {
+        if (!audioCtx || !state.isPlaying) return;
+        while (nextNoteTime < audioCtx.currentTime + SCHEDULE_AHEAD_SEC) {
+          scheduleStep(currentStep, nextNoteTime);
+          advanceNote();
+        }
+      }
+
+      function togglePlayback() {
+        if (!ensureAudio()) return;
+
+        if (state.isPlaying) {
+          state.isPlaying = false;
+          if (schedulerTimer) {
+            clearInterval(schedulerTimer);
+            schedulerTimer = null;
+          }
+          visualStepQueue.length = 0;
+          state.currentVisualStep = -1;
+          updatePlayheadUI(-1);
+          updateTransportUI();
+        } else {
+          state.isPlaying = true;
+          currentStep = 0;
+          nextNoteTime = audioCtx.currentTime + 0.05;
+          schedulerTimer = setInterval(schedulerTick, LOOKAHEAD_MS);
+          updateTransportUI();
+        }
+      }
+
+      /* =========================================================================
+       * 9. ЗАПИСЬ АУДИО (MEDIA RECORDER -> DOWNLOAD)
+       * ========================================================================= */
+      function toggleRecording() {
+        if (!ensureAudio()) return;
+        if (!mediaStreamDest || typeof MediaRecorder === 'undefined') {
+          showToast('Запись аудио не поддерживается этим браузером', 'error');
+          return;
+        }
+
+        if (state.recording.active) {
+          // Остановка записи
+          state.recording.active = false;
+          if (state.recording.timerId) clearInterval(state.recording.timerId);
+          if (state.recording.recorder && state.recording.recorder.state !== 'inactive') {
+            state.recording.recorder.stop();
+          }
+          updateRecordButtonUI();
+        } else {
+          // Старт записи
+          try {
+            const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', ''];
+            const selectedMime = mimeTypes.find(m => m === '' || MediaRecorder.isTypeSupported(m));
+            const options = selectedMime ? { mimeType: selectedMime } : undefined;
+
+            const recorder = new MediaRecorder(mediaStreamDest.stream, options);
+            state.recording.chunks = [];
+            state.recording.recorder = recorder;
+            state.recording.active = true;
+            state.recording.startTime = Date.now();
+
+            recorder.ondataavailable = (e) => {
+              if (e.data && e.data.size > 0) state.recording.chunks.push(e.data);
+            };
+
+            recorder.onstop = () => {
+              const mime = recorder.mimeType || 'audio/webm';
+              const ext = mime.includes('ogg') ? 'ogg' : 'webm';
+              const blob = new Blob(state.recording.chunks, { type: mime });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              const now = new Date();
+              const stamp = `${now.getHours().toString().padStart(2,'0')}-${now.getMinutes().toString().padStart(2,'0')}`;
+              a.href = url;
+              a.download = `synthpop-mix-${stamp}.${ext}`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 5000);
+              showToast('Микс записан и сохранен!', 'success');
+            };
+
+            recorder.start();
+            // Автозапуск воспроизведения при нажатии Запись, если плеер на паузе
+            if (!state.isPlaying) {
+              togglePlayback();
+            }
+            state.recording.timerId = setInterval(updateRecordButtonUI, 250);
+            updateRecordButtonUI();
+            showToast('Идет запись аудиопотока...', 'info');
+          } catch (err) {
+            console.error('Ошибка записи:', err);
+            state.recording.active = false;
+            updateRecordButtonUI();
+            showToast('Не удалось начать запись', 'error');
+          }
+        }
+      }
+
+      /* =========================================================================
+       * 10. ГЕНЕРАТОРЫ МУЗЫКАЛЬНЫХ РИФФОВ И ПРЕСЕТЫ
+       * ========================================================================= */
+      function generateTrackRiff(trackId) {
+        const clip = createEmptyClip();
+        const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+        if (trackId === 'bass') {
+          const roots = [0, 0, 5, 3]; // Типичная техно-поп прогрессия Am -> Am -> F -> Dm
+          const groove = pick(['offbeat', 'rolling', 'octave']);
+          for (let s = 0; s < 16; s++) {
+            const barRoot = roots[Math.floor(s / 4)];
+            if (groove === 'offbeat') {
+              if (s % 4 === 2 || s % 4 === 3) clip[s] = [s % 4 === 3 && Math.random() > 0.5 ? 7 : barRoot];
+              else if (s % 4 === 0 && Math.random() > 0.35) clip[s] = [barRoot];
+            } else if (groove === 'rolling') {
+              if (s % 4 !== 0 || Math.random() > 0.4) {
+                clip[s] = [s % 4 === 2 && Math.random() > 0.55 ? 7 : barRoot];
+              }
+            } else {
+              if (s % 2 === 0) clip[s] = [barRoot];
+              else if (Math.random() > 0.55) clip[s] = [7];
+            }
+          }
+        } else if (trackId === 'pad') {
+          // Созвучия трезвучий на сильные доли
+          const chords = [
+            [0, 2, 4],
+            [5, 0, 2],
+            [3, 5, 7],
+            [2, 4, 6]
+          ];
+          clip[0] = pick([chords[0], [0, 4, 7]]);
+          if (Math.random() > 0.45) {
+            clip[8] = pick([chords[1], chords[2]]);
+            if (Math.random() > 0.5) clip[12] = pick([chords[2], chords[3]]);
+          } else {
+            clip[6] = chords[3];
+            clip[10] = chords[2];
+          }
+        } else if (trackId === 'arp') {
+          // Энергичное 16-дольное арпеджио
+          const motif = [pick([0,2]), pick([4,5]), pick([7,6]), pick([2,4])];
+          for (let s = 0; s < 16; s++) {
+            if (Math.random() > 0.18) {
+              const note = motif[s % 4] + (s >= 12 && Math.random() > 0.6 ? 1 : 0);
+              clip[s] = [Math.min(7, note)];
+            }
+          }
+        } else {
+          // Lead: запоминающийся синкопированный хук
+          const catchyPositions = [0, 2, 3, 6, 8, 10, 12, 14, 15];
+          const strongDegrees = [0, 2, 4, 5, 7];
+          let prev = pick([4, 7]);
+          catchyPositions.forEach(pos => {
+            if (Math.random() > 0.32) {
+              // Плавное голосоведение с периодическим скачком
+              const candidates = strongDegrees.filter(d => Math.abs(d - prev) <= 3);
+              const next = pick(candidates.length ? candidates : strongDegrees);
+              clip[pos] = [next];
+              prev = next;
+            }
+          });
+          // Гарантируем ноту на первую долю
+          if (clip[0].length === 0) clip[0] = [pick([4, 7])];
+        }
+
+        const tr = state.tracks[trackId];
+        tr.clips[tr.activeClip] = clip;
+      }
+
+      function generateRandomDrums() {
+        const kickPatterns = [
+          [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+          [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,1,0],
+          [1,0,0,1, 0,0,1,0, 1,0,0,0, 1,0,0,0]
+        ];
+        const clapPatterns = [
+          [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+          [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1],
+          [0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0]
+        ];
+        const hatPatterns = [
+          [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,1],
+          [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1],
+          [1,1,1,0, 1,1,1,0, 1,1,1,0, 1,1,1,1]
+        ];
+
+        const pick = (a) => a[Math.floor(Math.random() * a.length)];
+        state.drums.kick.steps = [...pick(kickPatterns)];
+        state.drums.clap.steps = [...pick(clapPatterns)];
+        state.drums.hihat.steps = [...pick(hatPatterns)];
+        state.drums.perc.steps = Array.from({ length: 16 }, (_, i) => (i % 4 !== 0 && Math.random() > 0.76 ? 1 : 0));
+      }
+
+      function loadPreset(presetKey, silent = false) {
+        const p = PRESETS[presetKey];
+        if (!p) return;
+
+        state.preset = presetKey;
+        state.bpm = p.bpm;
+        state.swing = p.swing;
+        state.scale = p.scale;
+
+        // FX
+        state.fx.cutoff = p.fx.cutoff;
+        state.fx.res = p.fx.res;
+        state.fx.delay = p.fx.delay;
+        state.fx.reverb = p.fx.reverb;
+        state.fx.sidechain = p.fx.sidechain;
+
+        // Сброс XY к значениям пресета
+        state.xy.latch = false;
+        state.xy.active = false;
+        state.xy.x = p.fx.cutoff / 100;
+        state.xy.y = p.fx.res / 100;
+
+        // Дорожки и клипы A/B/C/D
+        TRACK_META.forEach(meta => {
+          const tr = state.tracks[meta.id];
+          tr.timbre = p.timbres[meta.id] || meta.defaultTimbre;
+          tr.activeClip = 'A';
+          tr.muted = false;
+          tr.solo = false;
+          ['A', 'B', 'C', 'D'].forEach(clipKey => {
+            tr.clips[clipKey] = cloneClip(p.clips[meta.id][clipKey]);
+          });
+        });
+
+        // Ударные
+        DRUM_META.forEach(meta => {
+          state.drums[meta.id].steps = [...p.drums[meta.id]];
+          state.drums[meta.id].muted = false;
+        });
+
+        syncAllControlsUI();
+        renderMelodyTracks();
+        renderPianoRoll();
+        renderDrumSequencer();
+        updateAudioFXParams();
+
+        if (!silent) {
+          showToast(`Загружен пресет «${p.name}»`, 'info');
+        }
+      }
+
+      /* =========================================================================
+       * 11. ОТРИСОВКА ИНТЕРФЕЙСА (UI RENDERING)
+       * ========================================================================= */
+      function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        const colors = {
+          info: 'border-cyan-400/50 text-cyan-100 bg-[#121829]/95',
+          success: 'border-lime-400/50 text-lime-100 bg-[#131e18]/95',
+          error: 'border-rose-500/60 text-rose-100 bg-[#23121b]/95'
+        };
+        el.className = `pointer-events-auto px-3.5 py-2.5 rounded-xl border text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-300 translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+        el.textContent = message;
+        container.appendChild(el);
+
+        requestAnimationFrame(() => {
+          el.classList.remove('translate-y-2', 'opacity-0');
+        });
+        setTimeout(() => {
+          el.classList.add('opacity-0', 'translate-y-2');
+          setTimeout(() => el.remove(), 300);
+        }, 2600);
+      }
+
+      function updateTransportUI() {
+        const playBtn = document.getElementById('play-btn');
+        const playIcon = document.getElementById('play-icon');
+        const stopIcon = document.getElementById('stop-icon');
+        const playLabel = document.getElementById('play-label');
+        const led = document.getElementById('status-led');
+
+        if (state.isPlaying) {
+          playBtn.classList.remove('from-cyan-500', 'to-cyan-400', 'btn-neon-cyan');
+          playBtn.classList.add('from-magentaNeon', 'to-rose-500', 'btn-neon-magenta', 'text-white');
+          playBtn.classList.remove('text-obsidian');
+          playIcon.classList.add('hidden');
+          stopIcon.classList.remove('hidden');
+          playLabel.textContent = 'СТОП';
+          led.className = 'absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-limeNeon border border-obsidian shadow-[0_0_8px_#b8ff00]';
+        } else {
+          playBtn.classList.add('from-cyan-500', 'to-cyan-400', 'btn-neon-cyan', 'text-obsidian');
+          playBtn.classList.remove('from-magentaNeon', 'to-rose-500', 'btn-neon-magenta', 'text-white');
+          playIcon.classList.remove('hidden');
+          stopIcon.classList.add('hidden');
+          playLabel.textContent = 'СТАРТ';
+          led.className = 'absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-slate-600 border border-obsidian';
+          document.getElementById('beat-badge').textContent = 'STEP 01/16';
+        }
+      }
+
+      function updateRecordButtonUI() {
+        const btn = document.getElementById('record-btn');
+        const dot = document.getElementById('rec-dot');
+        const label = document.getElementById('rec-label');
+        if (state.recording.active) {
+          const sec = Math.floor((Date.now() - state.recording.startTime) / 1000);
+          const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+          const ss = String(sec % 60).padStart(2, '0');
+          btn.classList.add('border-rose-500/80', 'bg-rose-950/50', 'text-rose-200');
+          dot.classList.add('rec-dot-pulse');
+          label.textContent = `REC ${mm}:${ss}`;
+        } else {
+          btn.classList.remove('border-rose-500/80', 'bg-rose-950/50', 'text-rose-200');
+          dot.classList.remove('rec-dot-pulse');
+          label.textContent = 'Запись';
+        }
+      }
+
+      function syncAllControlsUI() {
+        document.getElementById('bpm-value').textContent = state.bpm;
+        document.getElementById('bpm-slider').value = state.bpm;
+        document.getElementById('swing-slider').value = state.swing;
+        document.getElementById('swing-value').textContent = `${state.swing}%`;
+        document.getElementById('scale-select').value = state.scale;
+        document.getElementById('preset-select').value = state.preset;
+
+        document.getElementById('fx-cutoff').value = state.fx.cutoff;
+        document.getElementById('fx-res').value = state.fx.res;
+        document.getElementById('fx-delay').value = state.fx.delay;
+        document.getElementById('fx-reverb').value = state.fx.reverb;
+        document.getElementById('fx-sidechain').value = state.fx.sidechain;
+        document.getElementById('fx-master').value = state.fx.master;
+
+        updateFXReadouts();
+        updateXYLatchUI();
+      }
+
+      function updateFXReadouts() {
+        const hz = cutoffPercentToHz(state.fx.cutoff);
+        document.getElementById('fx-cutoff-val').textContent = hz >= 1000 ? `${(hz / 1000).toFixed(1)}k` : `${Math.round(hz)}Hz`;
+        const q = (0.6 + Math.pow(state.fx.res / 100, 1.35) * 16).toFixed(1);
+        document.getElementById('fx-res-val').textContent = q;
+        document.getElementById('fx-delay-val').textContent = `${state.fx.delay}%`;
+        document.getElementById('fx-reverb-val').textContent = `${state.fx.reverb}%`;
+        document.getElementById('fx-sidechain-val').textContent = `${state.fx.sidechain}%`;
+        document.getElementById('fx-master-val').textContent = `${state.fx.master}%`;
+
+        const xyCut = cutoffPercentToHz(state.xy.x * 100);
+        const xyQ = (0.6 + Math.pow(state.xy.y, 1.35) * 16).toFixed(1);
+        const cutTxt = xyCut >= 1000 ? `${(xyCut / 1000).toFixed(1)}kHz` : `${Math.round(xyCut)}Hz`;
+        document.getElementById('xy-readout').textContent = `LPF: ${cutTxt} · Q: ${xyQ}`;
+      }
+
+      function updateXYLatchUI() {
+        const btn = document.getElementById('xy-latch-btn');
+        if (state.xy.latch) {
+          btn.textContent = 'ФИКС: ВКЛ';
+          btn.classList.add('border-limeNeon', 'text-limeNeon', 'bg-lime-500/15');
+          btn.classList.remove('border-[#2d334d]', 'text-slate-300');
+        } else {
+          btn.textContent = 'ФИКС: ВЫКЛ';
+          btn.classList.remove('border-limeNeon', 'text-limeNeon', 'bg-lime-500/15');
+          btn.classList.add('border-[#2d334d]', 'text-slate-300');
+        }
+      }
+
+      // Отрисовка 4 карточек мелодических дорожек (Микшер и клипы A/B/C/D)
+      function renderMelodyTracks() {
+        const grid = document.getElementById('melody-tracks-grid');
+        grid.innerHTML = '';
+
+        TRACK_META.forEach(meta => {
+          const tr = state.tracks[meta.id];
+          const isSelected = state.selectedTrackId === meta.id;
+
+          const card = document.createElement('div');
+          card.className = `rounded-xl p-2.5 flex flex-col gap-2 transition-all cursor-pointer border ${
+            isSelected
+              ? 'bg-[#191d30]'
+              : 'bg-[#10121d] border-[#22263b] hover:border-[#343b59]'
+          }`;
+          if (isSelected) {
+            card.style.borderColor = meta.color;
+            card.style.boxShadow = `0 0 18px -4px ${meta.glow}`;
+          }
+
+          card.addEventListener('click', (e) => {
+            // Игнорируем клики по внутренним кнопкам/контролам, чтобы они не мешали, но выбор трека удобен
+            if (e.target.closest('select') || e.target.closest('input')) return;
+            if (state.selectedTrackId !== meta.id) {
+              state.selectedTrackId = meta.id;
+              renderMelodyTracks();
+              renderPianoRoll();
+            }
+          });
+
+          // Заголовок дорожки + M/S
+          const header = document.createElement('div');
+          header.className = 'flex items-center justify-between gap-1.5';
+          header.innerHTML = `
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${meta.color}; box-shadow:0 0 8px ${meta.color};"></span>
+              <span class="text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-slate-200'}">${meta.name}</span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button data-action="mute" title="Заглушить (Mute)" class="w-6 h-6 rounded-md text-[10px] font-mono font-bold border transition cursor-pointer ${
+                tr.muted
+                  ? 'bg-rose-500/25 border-rose-400 text-rose-200'
+                  : 'bg-[#181b2b] border-[#2c314b] text-slate-400 hover:text-white'
+              }">M</button>
+              <button data-action="solo" title="Соло (Solo)" class="w-6 h-6 rounded-md text-[10px] font-mono font-bold border transition cursor-pointer ${
+                tr.solo
+                  ? 'bg-amber-500/25 border-amber-400 text-amber-200'
+                  : 'bg-[#181b2b] border-[#2c314b] text-slate-400 hover:text-white'
+              }">S</button>
+            </div>
+          `;
+
+          header.querySelector('[data-action="mute"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            tr.muted = !tr.muted;
+            renderMelodyTracks();
+          });
+          header.querySelector('[data-action="solo"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            tr.solo = !tr.solo;
+            renderMelodyTracks();
+          });
+
+          // Селектор тембра + громкость
+          const controls = document.createElement('div');
+          controls.className = 'flex flex-col gap-1.5';
+
+          const select = document.createElement('select');
+          select.className = 'studio-select rounded-lg px-2 py-1 text-[11px] font-mono w-full';
+          TIMBRES.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.label;
+            if (t.id === tr.timbre) opt.selected = true;
+            select.appendChild(opt);
+          });
+          select.addEventListener('change', (e) => {
+            tr.timbre = e.target.value;
+            ensureAudio();
+            triggerMelodicNote(meta.id, 0, audioCtx.currentTime, 0.25, true);
+          });
+
+          const volRow = document.createElement('div');
+          volRow.className = 'flex items-center gap-2';
+          volRow.innerHTML = `
+            <span class="text-[10px] font-mono text-slate-500">VOL</span>
+            <input type="range" min="0" max="100" value="${Math.round(tr.volume * 100)}"
+              class="studio-slider flex-1"
+              style="--slider-accent:${meta.color}; --slider-glow:${meta.glow};" />
+            <span class="text-[10px] font-mono text-slate-400 w-6 text-right vol-num">${Math.round(tr.volume * 100)}</span>
+          `;
+          const volInput = volRow.querySelector('input');
+          const volNum = volRow.querySelector('.vol-num');
+          volInput.addEventListener('input', (e) => {
+            const v = Number(e.target.value);
+            tr.volume = v / 100;
+            volNum.textContent = v;
+          });
+
+          controls.appendChild(select);
+          controls.appendChild(volRow);
+
+          // Кнопки быстрого переключения клипов A / B / C / D
+          const clipsRow = document.createElement('div');
+          clipsRow.className = 'grid grid-cols-4 gap-1 pt-1';
+          ['A', 'B', 'C', 'D'].forEach(clipKey => {
+            const hasNotes = tr.clips[clipKey].some(s => s.length > 0);
+            const isClipActive = tr.activeClip === clipKey;
+            const btn = document.createElement('button');
+            btn.className = 'py-1 rounded-md text-[11px] font-mono font-bold transition border cursor-pointer relative';
+            btn.textContent = clipKey;
+
+            if (isClipActive) {
+              btn.style.backgroundColor = meta.color;
+              btn.style.borderColor = meta.color;
+              btn.style.color = '#0b0c12';
+              btn.style.boxShadow = `0 0 10px ${meta.glow}`;
+            } else {
+              btn.className += hasNotes
+                ? ' bg-[#1a1f33] border-[#313857] text-slate-200 hover:border-slate-400'
+                : ' bg-[#121420] border-[#212539] text-slate-500 hover:text-slate-300';
+            }
+
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              tr.activeClip = clipKey;
+              state.selectedTrackId = meta.id;
+              renderMelodyTracks();
+              renderPianoRoll();
+            });
+            clipsRow.appendChild(btn);
+          });
+
+          card.appendChild(header);
+          card.appendChild(controls);
+          card.appendChild(clipsRow);
+          grid.appendChild(card);
+        });
+      }
+
+      // Отрисовка интерактивного Пиано-ролла (8 нот лада x 16 шагов)
+      function renderPianoRoll() {
+        const meta = TRACK_META.find(t => t.id === state.selectedTrackId);
+        const tr = state.tracks[state.selectedTrackId];
+        const scaleObj = SCALES[state.scale] || SCALES['Am'];
+        const clip = tr.clips[tr.activeClip];
+
+        // Заголовок пиано-ролла
+        const dot = document.getElementById('pr-track-dot');
+        dot.style.backgroundColor = meta.color;
+        dot.style.boxShadow = `0 0 10px ${meta.color}`;
+
+        const nameEl = document.getElementById('pr-track-name');
+        nameEl.textContent = meta.name;
+        nameEl.style.color = meta.color;
+
+        const badge = document.getElementById('pr-clip-badge');
+        badge.textContent = `КЛИП ${tr.activeClip}`;
+        badge.style.color = meta.color;
+        badge.style.borderColor = meta.color;
+        badge.style.backgroundColor = meta.bgTint;
+
+        // Номера шагов 1..16
+        const stepNumsEl = document.getElementById('pr-step-numbers');
+        stepNumsEl.innerHTML = '';
+        for (let s = 0; s < 16; s++) {
+          const div = document.createElement('div');
+          const isBeat = (s % 4 === 0);
+          div.className = `text-center text-[10px] font-mono rounded py-0.5 pr-step-hdr ${
+            isBeat ? 'text-slate-200 font-bold bg-[#181c2e]' : 'text-slate-500'
+          }`;
+          div.dataset.step = s;
+          div.textContent = s + 1;
+          stepNumsEl.appendChild(div);
+        }
+
+        // Строки нот сверху вниз (от 7-й ступени/октавы до 0-й/тоники)
+        const gridEl = document.getElementById('piano-roll-grid');
+        gridEl.innerHTML = '';
+
+        for (let degree = 7; degree >= 0; degree--) {
+          const row = document.createElement('div');
+          row.className = 'grid grid-cols-[46px_repeat(16,minmax(0,1fr))] gap-1 items-center';
+
+          // Подпись ноты
+          const labelBtn = document.createElement('button');
+          const isRoot = (degree === 0 || degree === 7);
+          labelBtn.className = `h-7 sm:h-8 rounded-md text-[11px] font-mono font-bold flex items-center justify-center border transition cursor-pointer ${
+            isRoot
+              ? 'bg-[#1c2136] border-[#363e61] text-white'
+              : 'bg-[#121523] border-[#21263b] text-slate-400 hover:text-white'
+          }`;
+          labelBtn.textContent = scaleObj.labels[degree];
+          labelBtn.title = 'Нажмите для прослушивания ноты';
+          labelBtn.addEventListener('click', () => {
+            if (ensureAudio()) {
+              triggerMelodicNote(meta.id, degree, audioCtx.currentTime, 0.22, true);
+            }
+          });
+          row.appendChild(labelBtn);
+
+          // 16 ячеек шагов
+          for (let s = 0; s < 16; s++) {
+            const isActive = clip[s].includes(degree);
+            const groupAlt = Math.floor(s / 4) % 2 === 1;
+            const cell = document.createElement('div');
+            cell.className = `step-cell h-7 sm:h-8 rounded-md border cursor-pointer pr-cell ${
+              isActive
+                ? ''
+                : (groupAlt ? 'bg-[#161928] border-[#242942] hover:bg-[#1f243b]' : 'bg-[#11131f] border-[#1f2336] hover:bg-[#1c2034]')
+            }`;
+            cell.dataset.step = s;
+            cell.dataset.degree = degree;
+
+            if (isActive) {
+              styleActivePianoCell(cell, meta);
+            }
+
+            // Поддержка рисования кликом и перетаскиванием (мышь + тач)
+            cell.addEventListener('pointerdown', (e) => {
+              e.preventDefault();
+              ensureAudio();
+              const currentlyOn = clip[s].includes(degree);
+              state.drag.active = true;
+              state.drag.type = 'piano';
+              state.drag.mode = !currentlyOn;
+              state.drag.lastKey = `${s}:${degree}`;
+              applyPianoCellToggle(s, degree, state.drag.mode, cell, meta);
+            });
+
+            row.appendChild(cell);
+          }
+
+          gridEl.appendChild(row);
+        }
+
+        if (state.currentVisualStep >= 0) {
+          updatePlayheadUI(state.currentVisualStep);
+        }
+      }
+
+      function styleActivePianoCell(cell, meta) {
+        cell.style.backgroundColor = meta.color;
+        cell.style.borderColor = '#ffffff88';
+        cell.style.boxShadow = `0 0 12px ${meta.glow}, inset 0 1px 2px rgba(255,255,255,0.45)`;
+      }
+
+      function styleInactivePianoCell(cell, step) {
+        const groupAlt = Math.floor(step / 4) % 2 === 1;
+        cell.style.backgroundColor = '';
+        cell.style.borderColor = '';
+        cell.style.boxShadow = '';
+        cell.className = `step-cell h-7 sm:h-8 rounded-md border cursor-pointer pr-cell ${
+          groupAlt ? 'bg-[#161928] border-[#242942] hover:bg-[#1f243b]' : 'bg-[#11131f] border-[#1f2336] hover:bg-[#1c2034]'
+        }`;
+      }
+
+      function applyPianoCellToggle(step, degree, turnOn, cellEl, meta) {
+        const tr = state.tracks[state.selectedTrackId];
+        const clip = tr.clips[tr.activeClip];
+        const idx = clip[step].indexOf(degree);
+
+        if (turnOn && idx === -1) {
+          clip[step].push(degree);
+          styleActivePianoCell(cellEl, meta);
+          // Прослушивание ноты при рисовании (если плеер на паузе — мягкий предпросмотр)
+          if (audioCtx && !state.isPlaying) {
+            triggerMelodicNote(meta.id, degree, audioCtx.currentTime, 0.2, true);
+          }
+        } else if (!turnOn && idx !== -1) {
+          clip[step].splice(idx, 1);
+          styleInactivePianoCell(cellEl, step);
+        }
+      }
+
+      // Отрисовка 4-дорожечной Драм-машины
+      function renderDrumSequencer() {
+        const container = document.getElementById('drum-grid-container');
+        container.innerHTML = '';
+
+        DRUM_META.forEach(meta => {
+          const dr = state.drums[meta.id];
+          const row = document.createElement('div');
+          row.className = 'grid grid-cols-[155px_repeat(16,minmax(0,1fr))] gap-1 items-center';
+
+          // Левая колонка: Название, Mute, Громкость
+          const ctrl = document.createElement('div');
+          ctrl.className = 'flex items-center gap-1.5 pr-2';
+          ctrl.innerHTML = `
+            <button class="drum-mute w-6 h-6 rounded-md text-[10px] font-mono font-bold border shrink-0 transition cursor-pointer ${
+              dr.muted
+                ? 'bg-rose-500/25 border-rose-400 text-rose-200'
+                : 'bg-[#181b2b] border-[#2c314b] text-slate-400 hover:text-white'
+            }" title="Заглушить">M</button>
+            <div class="flex flex-col min-w-0 flex-1">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold truncate" style="color:${meta.color};">${meta.name}</span>
+              </div>
+              <input type="range" min="0" max="100" value="${Math.round(dr.volume * 100)}"
+                class="studio-slider w-full mt-0.5"
+                style="--slider-accent:${meta.color}; --slider-glow:${meta.glow}; height:4px;" />
+            </div>
+          `;
+
+          ctrl.querySelector('.drum-mute').addEventListener('click', () => {
+            dr.muted = !dr.muted;
+            renderDrumSequencer();
+          });
+
+          ctrl.querySelector('input').addEventListener('input', (e) => {
+            dr.volume = Number(e.target.value) / 100;
+          });
+
+          row.appendChild(ctrl);
+
+          // 16 пэдов шагов ударных
+          for (let s = 0; s < 16; s++) {
+            const isOn = !!dr.steps[s];
+            const groupAlt = Math.floor(s / 4) % 2 === 1;
+            const pad = document.createElement('div');
+            pad.className = `step-cell h-8 sm:h-9 rounded-md border cursor-pointer drum-cell ${
+              isOn
+                ? ''
+                : (groupAlt ? 'bg-[#181c2e] border-[#272d47] hover:bg-[#222842]' : 'bg-[#111421] border-[#1f2338] hover:bg-[#1b2036]')
+            }`;
+            pad.dataset.drum = meta.id;
+            pad.dataset.step = s;
+
+            if (isOn) {
+              styleActiveDrumPad(pad, meta);
+            }
+
+            pad.addEventListener('pointerdown', (e) => {
+              e.preventDefault();
+              ensureAudio();
+              state.drag.active = true;
+              state.drag.type = 'drum';
+              state.drag.mode = !dr.steps[s];
+              state.drag.lastKey = `${meta.id}:${s}`;
+              applyDrumPadToggle(meta.id, s, state.drag.mode, pad, meta);
+            });
+
+            row.appendChild(pad);
+          }
+
+          container.appendChild(row);
+        });
+
+        if (state.currentVisualStep >= 0) {
+          updatePlayheadUI(state.currentVisualStep);
+        }
+      }
+
+      function styleActiveDrumPad(pad, meta) {
+        pad.style.backgroundColor = meta.color;
+        pad.style.borderColor = '#ffffff88';
+        pad.style.boxShadow = `0 0 11px ${meta.glow}, inset 0 1px 2px rgba(255,255,255,0.4)`;
+      }
+
+      function styleInactiveDrumPad(pad, step) {
+        const groupAlt = Math.floor(step / 4) % 2 === 1;
+        pad.style.backgroundColor = '';
+        pad.style.borderColor = '';
+        pad.style.boxShadow = '';
+        pad.className = `step-cell h-8 sm:h-9 rounded-md border cursor-pointer drum-cell ${
+          groupAlt ? 'bg-[#181c2e] border-[#272d47] hover:bg-[#222842]' : 'bg-[#111421] border-[#1f2338] hover:bg-[#1b2036]'
+        }`;
+      }
+
+      function applyDrumPadToggle(drumId, step, turnOn, padEl, meta) {
+        state.drums[drumId].steps[step] = turnOn ? 1 : 0;
+        if (turnOn) {
+          styleActiveDrumPad(padEl, meta);
+          if (audioCtx && !state.isPlaying) {
+            triggerDrum(drumId, audioCtx.currentTime, step);
+          }
+        } else {
+          styleInactiveDrumPad(padEl, step);
+        }
+      }
+
+      // Глобальная обработка drag-painting по сеткам (мышь + тач)
+      window.addEventListener('pointermove', (e) => {
+        if (!state.drag.active) return;
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        if (!target || !target.classList) return;
+
+        if (state.drag.type === 'piano' && target.classList.contains('pr-cell')) {
+          const step = Number(target.dataset.step);
+          const degree = Number(target.dataset.degree);
+          const key = `${step}:${degree}`;
+          if (key !== state.drag.lastKey) {
+            state.drag.lastKey = key;
+            const meta = TRACK_META.find(t => t.id === state.selectedTrackId);
+            applyPianoCellToggle(step, degree, state.drag.mode, target, meta);
+          }
+        } else if (state.drag.type === 'drum' && target.classList.contains('drum-cell')) {
+          const drumId = target.dataset.drum;
+          const step = Number(target.dataset.step);
+          const key = `${drumId}:${step}`;
+          if (key !== state.drag.lastKey) {
+            state.drag.lastKey = key;
+            const meta = DRUM_META.find(d => d.id === drumId);
+            applyDrumPadToggle(drumId, step, state.drag.mode, target, meta);
+          }
+        }
+      });
+
+      window.addEventListener('pointerup', () => {
+        state.drag.active = false;
+        state.drag.type = null;
+      });
+      window.addEventListener('pointercancel', () => {
+        state.drag.active = false;
+        state.drag.type = null;
+      });
+
+      // Подсветка текущего шага секвенсора (плейхед)
+      function updatePlayheadUI(step) {
+        document.querySelectorAll('.step-playhead-col').forEach(el => {
+          el.classList.remove('step-playhead-col');
+        });
+        document.querySelectorAll('.pr-step-hdr').forEach(el => {
+          const s = Number(el.dataset.step);
+          if (s === step) {
+            el.classList.add('bg-cyanNeon', 'text-obsidian');
+            el.classList.remove('text-slate-500', 'text-slate-200', 'bg-[#181c2e]');
+          } else {
+            el.classList.remove('bg-cyanNeon', 'text-obsidian');
+            if (s % 4 === 0) el.classList.add('text-slate-200', 'bg-[#181c2e]');
+            else el.classList.add('text-slate-500');
+          }
+        });
+
+        if (step >= 0) {
+          document.querySelectorAll(`.pr-cell[data-step="${step}"], .drum-cell[data-step="${step}"]`).forEach(el => {
+            el.classList.add('step-playhead-col');
+          });
+          const num = String(step + 1).padStart(2, '0');
+          document.getElementById('beat-badge').textContent = `STEP ${num}/16`;
+        }
+      }
+
+      /* =========================================================================
+       * 12. CANVAS-ВИЗУАЛИЗАТОР (СПЕКТР + ВОЛНА) И XY FX-ПЭД
+       * ========================================================================= */
+      const visCanvas = document.getElementById('visualizer-canvas');
+      const visCtx = visCanvas.getContext('2d');
+      const xyCanvas = document.getElementById('xy-pad-canvas');
+      const xyCtx = xyCanvas.getContext('2d');
+
+      function resizeCanvases() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        const vRect = visCanvas.parentElement.getBoundingClientRect();
+        visCanvas.width = Math.max(100, Math.floor(vRect.width * dpr));
+        visCanvas.height = Math.max(40, Math.floor(vRect.height * dpr));
+        visCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const xyRect = xyCanvas.parentElement.getBoundingClientRect();
+        xyCanvas.width = Math.max(100, Math.floor(xyRect.width * dpr));
+        xyCanvas.height = Math.max(100, Math.floor(xyRect.height * dpr));
+        xyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      const freqData = new Uint8Array(512);
+      const waveData = new Uint8Array(512);
+
+      function drawVisualizer() {
+        const w = visCanvas.clientWidth;
+        const h = visCanvas.clientHeight;
+        visCtx.clearRect(0, 0, w, h);
+
+        // Фоновая тонкая сетка
+        visCtx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        visCtx.lineWidth = 1;
+        visCtx.beginPath();
+        visCtx.moveTo(0, h / 2);
+        visCtx.lineTo(w, h / 2);
+        visCtx.stroke();
+
+        if (analyserNode && state.isPlaying) {
+          analyserNode.getByteFrequencyData(freqData);
+          analyserNode.getByteTimeDomainData(waveData);
+
+          // 1. Столбцы спектра
+          const barCount = 44;
+          const barW = w / barCount;
+          for (let i = 0; i < barCount; i++) {
+            const idx = Math.floor(Math.pow(i / barCount, 1.5) * 260);
+            const val = freqData[idx] / 255;
+            const barH = Math.max(2, val * (h - 6));
+
+            const grad = visCtx.createLinearGradient(0, h, 0, h - barH);
+            grad.addColorStop(0, 'rgba(0, 240, 255, 0.35)');
+            grad.addColorStop(0.6, 'rgba(255, 42, 133, 0.55)');
+            grad.addColorStop(1, 'rgba(184, 255, 0, 0.85)');
+
+            visCtx.fillStyle = grad;
+            visCtx.fillRect(i * barW + 1, h - barH, Math.max(2, barW - 2), barH);
+          }
+
+          // 2. Светящаяся осциллограмма поверх спектра
+          visCtx.save();
+          visCtx.beginPath();
+          visCtx.strokeStyle = '#00f0ff';
+          visCtx.lineWidth = 1.8;
+          visCtx.shadowColor = '#00f0ff';
+          visCtx.shadowBlur = 8;
+          const slice = w / 220;
+          for (let i = 0; i < 220; i++) {
+            const v = (waveData[i * 2] - 128) / 128;
+            const y = h / 2 + v * (h * 0.42);
+            if (i === 0) visCtx.moveTo(0, y);
+            else visCtx.lineTo(i * slice, y);
+          }
+          visCtx.stroke();
+          visCtx.restore();
+        } else {
+          // Спокойная «дышащая» линия в режиме ожидания
+          const t = performance.now() * 0.002;
+          visCtx.beginPath();
+          visCtx.strokeStyle = 'rgba(0, 240, 255, 0.32)';
+          visCtx.lineWidth = 1.5;
+          for (let x = 0; x <= w; x += 4) {
+            const y = h / 2 + Math.sin(x * 0.03 + t) * 4 * Math.sin(x / w * Math.PI);
+            if (x === 0) visCtx.moveTo(x, y);
+            else visCtx.lineTo(x, y);
+          }
+          visCtx.stroke();
+        }
+      }
+
+      function drawXYPad() {
+        const w = xyCanvas.clientWidth;
+        const h = xyCanvas.clientHeight;
+        xyCtx.clearRect(0, 0, w, h);
+
+        // Сетка 4x4
+        xyCtx.strokeStyle = 'rgba(120, 140, 200, 0.12)';
+        xyCtx.lineWidth = 1;
+        for (let i = 1; i < 4; i++) {
+          xyCtx.beginPath();
+          xyCtx.moveTo((w / 4) * i, 0);
+          xyCtx.lineTo((w / 4) * i, h);
+          xyCtx.stroke();
+
+          xyCtx.beginPath();
+          xyCtx.moveTo(0, (h / 4) * i);
+          xyCtx.lineTo(w, (h / 4) * i);
+          xyCtx.stroke();
+        }
+
+        const px = state.xy.x * w;
+        const py = (1 - state.xy.y) * h;
+
+        // Затухающий неоновый след (trail)
+        if (state.xy.trail.length > 1) {
+          for (let i = 1; i < state.xy.trail.length; i++) {
+            const p0 = state.xy.trail[i - 1];
+            const p1 = state.xy.trail[i];
+            const alpha = (i / state.xy.trail.length) * 0.65;
+            xyCtx.beginPath();
+            xyCtx.strokeStyle = `rgba(0, 240, 255, ${alpha})`;
+            xyCtx.lineWidth = 2.5 * (i / state.xy.trail.length);
+            xyCtx.moveTo(p0.x * w, (1 - p0.y) * h);
+            xyCtx.lineTo(p1.x * w, (1 - p1.y) * h);
+            xyCtx.stroke();
+          }
+        }
+        // Постепенное стирание следа в покое
+        if (!state.xy.active && state.xy.trail.length > 0) {
+          state.xy.trail.shift();
+        }
+
+        // Радиальное свечение под точкой
+        const activeColor = (state.xy.active || state.xy.latch) ? 'rgba(255, 42, 133, 0.35)' : 'rgba(0, 240, 255, 0.22)';
+        const grad = xyCtx.createRadialGradient(px, py, 2, px, py, 58);
+        grad.addColorStop(0, activeColor);
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        xyCtx.fillStyle = grad;
+        xyCtx.fillRect(0, 0, w, h);
+
+        // Перекрестие (Crosshair)
+        xyCtx.strokeStyle = (state.xy.active || state.xy.latch) ? 'rgba(255, 42, 133, 0.45)' : 'rgba(0, 240, 255, 0.25)';
+        xyCtx.lineWidth = 1;
+        xyCtx.setLineDash([4, 4]);
+        xyCtx.beginPath();
+        xyCtx.moveTo(px, 0); xyCtx.lineTo(px, h);
+        xyCtx.moveTo(0, py); xyCtx.lineTo(w, py);
+        xyCtx.stroke();
+        xyCtx.setLineDash([]);
+
+        // Светящийся курсор
+        xyCtx.beginPath();
+        xyCtx.arc(px, py, state.xy.active ? 10 : 8, 0, Math.PI * 2);
+        xyCtx.fillStyle = (state.xy.active || state.xy.latch) ? '#ff2a85' : '#00f0ff';
+        xyCtx.shadowColor = (state.xy.active || state.xy.latch) ? '#ff2a85' : '#00f0ff';
+        xyCtx.shadowBlur = 16;
+        xyCtx.fill();
+        xyCtx.shadowBlur = 0;
+
+        xyCtx.beginPath();
+        xyCtx.arc(px, py, 3.5, 0, Math.PI * 2);
+        xyCtx.fillStyle = '#ffffff';
+        xyCtx.fill();
+      }
+
+      // Главный цикл анимации (плейхед + визуализатор + XY пэд)
+      function animationLoop() {
+        if (audioCtx && state.isPlaying) {
+          const now = audioCtx.currentTime;
+          let latestStep = state.currentVisualStep;
+          while (visualStepQueue.length && visualStepQueue[0].time <= now + 0.015) {
+            latestStep = visualStepQueue[0].step;
+            visualStepQueue.shift();
+          }
+          if (latestStep !== state.currentVisualStep) {
+            state.currentVisualStep = latestStep;
+            updatePlayheadUI(latestStep);
+          }
+        }
+
+        drawVisualizer();
+        drawXYPad();
+        requestAnimationFrame(animationLoop);
+      }
+
+      /* =========================================================================
+       * 13. ПРИВЯЗКА ВСЕХ СОБЫТИЙ ИНТЕРФЕЙСА
+       * ========================================================================= */
+      function bindUIEvents() {
+        // Транспорт
+        document.getElementById('play-btn').addEventListener('click', togglePlayback);
+        document.getElementById('record-btn').addEventListener('click', toggleRecording);
+
+        // BPM
+        const setBpm = (val) => {
+          state.bpm = Math.max(105, Math.min(145, Math.round(val)));
+          document.getElementById('bpm-value').textContent = state.bpm;
+          document.getElementById('bpm-slider').value = state.bpm;
+          updateAudioFXParams();
+        };
+        document.getElementById('bpm-down').addEventListener('click', () => setBpm(state.bpm - 1));
+        document.getElementById('bpm-up').addEventListener('click', () => setBpm(state.bpm + 1));
+        document.getElementById('bpm-slider').addEventListener('input', (e) => setBpm(Number(e.target.value)));
+
+        // Свинг
+        document.getElementById('swing-slider').addEventListener('input', (e) => {
+          state.swing = Number(e.target.value);
+          document.getElementById('swing-value').textContent = `${state.swing}%`;
+        });
+
+        // Тональность
+        document.getElementById('scale-select').addEventListener('change', (e) => {
+          state.scale = e.target.value;
+          renderPianoRoll();
+          showToast(`Тональность: ${SCALES[state.scale].name}`, 'info');
+        });
+
+        // Пресеты
+        document.getElementById('preset-select').addEventListener('change', (e) => {
+          loadPreset(e.target.value);
+        });
+
+        // Случайный микс
+        document.getElementById('random-mix-btn').addEventListener('click', () => {
+          ensureAudio();
+          TRACK_META.forEach(m => generateTrackRiff(m.id));
+          generateRandomDrums();
+          renderMelodyTracks();
+          renderPianoRoll();
+          renderDrumSequencer();
+          showToast('Создан новый случайный микс!', 'success');
+        });
+
+        // Очистить всё
+        document.getElementById('clear-all-btn').addEventListener('click', () => {
+          TRACK_META.forEach(m => {
+            const tr = state.tracks[m.id];
+            tr.clips[tr.activeClip] = createEmptyClip();
+          });
+          DRUM_META.forEach(d => {
+            state.drums[d.id].steps = Array(16).fill(0);
+          });
+          renderMelodyTracks();
+          renderPianoRoll();
+          renderDrumSequencer();
+          showToast('Все текущие паттерны очищены', 'info');
+        });
+
+        // Кнопки Пиано-ролла
+        document.getElementById('pr-generate-btn').addEventListener('click', () => {
+          ensureAudio();
+          generateTrackRiff(state.selectedTrackId);
+          renderMelodyTracks();
+          renderPianoRoll();
+          const meta = TRACK_META.find(t => t.id === state.selectedTrackId);
+          showToast(`Сгенерирован новый рифф для «${meta.shortName}»`, 'success');
+        });
+
+        document.getElementById('pr-clear-btn').addEventListener('click', () => {
+          const tr = state.tracks[state.selectedTrackId];
+          tr.clips[tr.activeClip] = createEmptyClip();
+          renderMelodyTracks();
+          renderPianoRoll();
+        });
+
+        // Кнопки Драм-машины
+        document.getElementById('drum-random-btn').addEventListener('click', () => {
+          ensureAudio();
+          generateRandomDrums();
+          renderDrumSequencer();
+          showToast('Сгенерирован новый драм-бит', 'success');
+        });
+
+        document.getElementById('drum-clear-btn').addEventListener('click', () => {
+          DRUM_META.forEach(d => { state.drums[d.id].steps = Array(16).fill(0); });
+          renderDrumSequencer();
+        });
+
+        // FX Слайдеры
+        const fxBindings = [
+          { id: 'fx-cutoff', key: 'cutoff' },
+          { id: 'fx-res', key: 'res' },
+          { id: 'fx-delay', key: 'delay' },
+          { id: 'fx-reverb', key: 'reverb' },
+          { id: 'fx-sidechain', key: 'sidechain' },
+          { id: 'fx-master', key: 'master' }
+        ];
+        fxBindings.forEach(({ id, key }) => {
+          document.getElementById(id).addEventListener('input', (e) => {
+            state.fx[key] = Number(e.target.value);
+            if (!state.xy.active && !state.xy.latch) {
+              if (key === 'cutoff') state.xy.x = state.fx.cutoff / 100;
+              if (key === 'res') state.xy.y = state.fx.res / 100;
+            }
+            updateFXReadouts();
+            updateAudioFXParams();
+          });
+        });
+
+        // Интерактивный XY FX Пэд
+        const xyWrap = document.getElementById('xy-pad-wrapper');
+        const updateXYFromPointer = (clientX, clientY) => {
+          const rect = xyWrap.getBoundingClientRect();
+          const nx = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+          const ny = Math.max(0, Math.min(1, 1 - (clientY - rect.top) / rect.height));
+          state.xy.x = nx;
+          state.xy.y = ny;
+          state.xy.trail.push({ x: nx, y: ny });
+          if (state.xy.trail.length > 26) state.xy.trail.shift();
+          updateFXReadouts();
+          updateAudioFXParams();
+        };
+
+        xyWrap.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          ensureAudio();
+          xyWrap.setPointerCapture(e.pointerId);
+          state.xy.active = true;
+          updateXYFromPointer(e.clientX, e.clientY);
+        });
+
+        xyWrap.addEventListener('pointermove', (e) => {
+          if (!state.xy.active) return;
+          updateXYFromPointer(e.clientX, e.clientY);
+        });
+
+        const releaseXY = () => {
+          if (!state.xy.active) return;
+          state.xy.active = false;
+          if (!state.xy.latch) {
+            state.xy.x = state.fx.cutoff / 100;
+            state.xy.y = state.fx.res / 100;
+          }
+          updateFXReadouts();
+          updateAudioFXParams();
+        };
+        xyWrap.addEventListener('pointerup', releaseXY);
+        xyWrap.addEventListener('pointercancel', releaseXY);
+
+        document.getElementById('xy-latch-btn').addEventListener('click', () => {
+          state.xy.latch = !state.xy.latch;
+          if (!state.xy.latch) {
+            state.xy.x = state.fx.cutoff / 100;
+            state.xy.y = state.fx.res / 100;
+          }
+          updateXYLatchUI();
+          updateFXReadouts();
+          updateAudioFXParams();
+        });
+
+        document.getElementById('xy-reset-btn').addEventListener('click', () => {
+          state.xy.latch = false;
+          state.xy.active = false;
+          state.xy.trail = [];
+          state.xy.x = state.fx.cutoff / 100;
+          state.xy.y = state.fx.res / 100;
+          updateXYLatchUI();
+          updateFXReadouts();
+          updateAudioFXParams();
+        });
+
+        // 4 Лайв-пэда
+        const riserBtn = document.getElementById('pad-riser');
+        riserBtn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          triggerRiserFX();
+          riserBtn.classList.add('pad-active');
+          setTimeout(() => riserBtn.classList.remove('pad-active'), 200);
+        });
+
+        const dropBtn = document.getElementById('pad-drop');
+        dropBtn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          triggerDropFX();
+          dropBtn.classList.add('pad-active');
+          setTimeout(() => dropBtn.classList.remove('pad-active'), 200);
+        });
+
+        // HPF Брейк (удержание)
+        const hpfBtn = document.getElementById('pad-hpf');
+        const setHpfBreak = (on) => {
+          state.live.hpfBreak = on;
+          hpfBtn.classList.toggle('pad-active', on);
+          hpfBtn.classList.toggle('ring-2', on);
+          hpfBtn.classList.toggle('ring-amberNeon', on);
+          updateAudioFXParams();
+        };
+        hpfBtn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          ensureAudio();
+          hpfBtn.setPointerCapture(e.pointerId);
+          setHpfBreak(true);
+        });
+        hpfBtn.addEventListener('pointerup', () => setHpfBreak(false));
+        hpfBtn.addEventListener('pointercancel', () => setHpfBreak(false));
+
+        // Глитч 1/8 (удержание)
+        const glitchBtn = document.getElementById('pad-glitch');
+        const setGlitch = (on) => {
+          if (on && !state.live.glitch) {
+            state.live.glitchAnchor = Math.max(0, state.currentVisualStep >= 0 ? state.currentVisualStep : currentStep);
+            state.live.glitchCounter = 0;
+          }
+          state.live.glitch = on;
+          glitchBtn.classList.toggle('pad-active', on);
+          glitchBtn.classList.toggle('ring-2', on);
+          glitchBtn.classList.toggle('ring-limeNeon', on);
+        };
+        glitchBtn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          ensureAudio();
+          glitchBtn.setPointerCapture(e.pointerId);
+          setGlitch(true);
+        });
+        glitchBtn.addEventListener('pointerup', () => setGlitch(false));
+        glitchBtn.addEventListener('pointercancel', () => setGlitch(false));
+
+        // Горячие клавиши: Пробел (Старт/Стоп), 1-4 (Выбор дорожки)
+        window.addEventListener('keydown', (e) => {
+          if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlayback();
+          } else if (['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) {
+            const idx = Number(e.code.replace('Digit', '')) - 1;
+            if (TRACK_META[idx]) {
+              state.selectedTrackId = TRACK_META[idx].id;
+              renderMelodyTracks();
+              renderPianoRoll();
+            }
+          }
+        });
+
+        window.addEventListener('resize', resizeCanvases);
+      }
+
+      /* =========================================================================
+       * 14. СТАРТ ПРИЛОЖЕНИЯ
+       * ========================================================================= */
+      window.addEventListener('DOMContentLoaded', () => {
+        initTrackStructures();
+        bindUIEvents();
+        loadPreset('berlin', true); // Сразу загружаем «Неоновый Берлин»
+        resizeCanvases();
+        requestAnimationFrame(animationLoop);
+      });
+    })();
+  </script>
+</body>
+</html>
